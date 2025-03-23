@@ -1,4 +1,15 @@
 import Image from "next/image";
+import client from "../app/lib/mongodb";
+import type { InferGetServerSidePropsType, GetServerSideProps } from "next";
+
+export const connectToMongoDB = async () => {
+  try {
+    await client.connect();
+    console.log("Connected!");
+  } catch (e) {
+    console.error(e);
+  }
+};
 
 export default function Home() {
   return (
