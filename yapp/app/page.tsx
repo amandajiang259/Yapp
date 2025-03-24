@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { auth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "./authentication/firebase";
+import { auth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, sendPasswordResetEmail } from "./authentication/firebase";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
 import { User } from 'firebase/auth';
 
 export default function Home() {
@@ -11,6 +10,9 @@ export default function Home() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isRegistering, setIsRegistering] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -27,6 +29,7 @@ export default function Home() {
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
     try {
       if (isRegistering) {
         await createUserWithEmailAndPassword(auth, email, password);
@@ -34,9 +37,21 @@ export default function Home() {
         await signInWithEmailAndPassword(auth, email, password);
       }
       router.push("/dashboard");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Auth Error:", error);
-      alert(error instanceof Error ? error.message : "An error occurred");
+      if (error.code === 'auth/invalid-credential') {
+        setError("Invalid email or password. Please register an account first if you haven't already.");
+      } else if (error.code === 'auth/user-not-found') {
+        setError("No account found with this email. Please register first.");
+      } else if (error.code === 'auth/wrong-password') {
+        setError("Incorrect password. Please try again.");
+      } else if (error.code === 'auth/weak-password') {
+        setError("Password should be at least 6 characters long. Please choose a stronger password.");
+      } else if (error.code === 'auth/email-already-in-use') {
+        setError("This email already has an account associated with it. Please log into the account. If you forgot your password, click 'Forgot Password'.");
+      } else {
+        setError(error.message || "An error occurred during authentication");
+      }
     }
   };
 
@@ -49,57 +64,72 @@ export default function Home() {
     }
   };
 
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setSuccessMessage(null);
+    try {
+      await sendPasswordResetEmail(auth, email);
+      setSuccessMessage("Password reset email sent! Please check your inbox.");
+      setIsForgotPassword(false);
+    } catch (error: any) {
+      console.error("Password Reset Error:", error);
+      if (error.code === 'auth/user-not-found') {
+        setError("No account found with this email. Please register first.");
+      } else {
+        setError(error.message || "An error occurred while sending the reset email");
+      }
+    }
+  };
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-500 via-purple-500 to-blue-600 flex items-center justify-center p-4">
+      <div className="w-full max-w-md">
+        <div className="bg-white rounded-2xl shadow-xl p-8">
+          <div className="text-center mb-8">
+            <h1 className="text-3xl font-bold text-gray-800 mb-2">Yapp</h1>
+            <p className="text-gray-600">Connect with your friends</p>
+          </div>
+
           {user ? (
-            <div>
-              <p>Welcome, {user.email}</p>
+            <div className="text-center">
+              <p className="text-gray-800 mb-4">Welcome, {user.email}</p>
               <button
                 onClick={handleLogout}
-                className="px-4 py-2 bg-red-500 text-white rounded-md"
+                className="w-full py-3 px-4 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
               >
                 Logout
               </button>
             </div>
           ) : (
-            <div className="w-full max-w-md">
-              <form onSubmit={handleAuth} className="space-y-4">
-                <div>
-                  <label htmlFor="email" className="block text-sm font-medium">
-                    Email
-                  </label>
-                  <input
-                    type="email"
-                    id="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                    required
-                  />
+            <form onSubmit={isForgotPassword ? handleForgotPassword : handleAuth} className="space-y-6">
+              {error && (
+                <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
+                  {error}
                 </div>
+              )}
+              {successMessage && (
+                <div className="p-4 bg-green-50 border border-green-200 text-green-700 rounded-lg text-sm">
+                  {successMessage}
+                </div>
+              )}
+              <div>
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  id="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                  placeholder="Enter your email"
+                  required
+                />
+              </div>
+              {!isForgotPassword && (
                 <div>
-                  <label htmlFor="password" className="block text-sm font-medium">
+                  <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
                     Password
                   </label>
                   <input
@@ -107,77 +137,51 @@ export default function Home() {
                     id="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                    placeholder="Enter your password"
                     required
                   />
                 </div>
-                <button
-                  type="submit"
-                  className="w-full px-4 py-2 bg-blue-500 text-white rounded-md"
-                >
-                  {isRegistering ? "Register" : "Login"}
-                </button>
+              )}
+              <button
+                type="submit"
+                className="w-full py-3 px-4 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-lg hover:from-blue-600 hover:to-purple-600 transition-colors font-medium"
+              >
+                {isForgotPassword ? "Send Reset Link" : (isRegistering ? "Create Account" : "Sign In")}
+              </button>
+              <div className="space-y-3">
                 <button
                   type="button"
                   onClick={() => setIsRegistering(!isRegistering)}
-                  className="w-full text-sm text-blue-500 hover:text-blue-700"
+                  className="w-full text-sm text-blue-600 hover:text-blue-700 font-medium"
                 >
                   {isRegistering
-                    ? "Already have an account? Login"
-                    : "Need an account? Register"}
+                    ? "Already have an account? Sign in"
+                    : "Don't have an account? Create one"}
                 </button>
-              </form>
-            </div>
+                {!isRegistering && !isForgotPassword && (
+                  <button
+                    type="button"
+                    onClick={() => setIsForgotPassword(true)}
+                    className="w-full text-sm text-blue-600 hover:text-blue-700 font-medium"
+                  >
+                    Forgot your password?
+                  </button>
+                )}
+                {isForgotPassword && (
+                  <button
+                    type="button"
+                    onClick={() => setIsForgotPassword(false)}
+                    className="w-full text-sm text-blue-600 hover:text-blue-700 font-medium"
+                  >
+                    Back to Sign In
+                  </button>
+                )}
+              </div>
+            </form>
           )}
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+      </div>
     </div>
   );
 }
