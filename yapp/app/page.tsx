@@ -119,6 +119,15 @@ export default function Home() {
     }
   };
 
+  // Add function to handle switching between login and register
+  const handleSwitchMode = () => {
+    setIsRegistering(!isRegistering);
+    setEmail('');
+    setPassword('');
+    setError(null);
+    setSuccessMessage(null);
+  };
+
   if (user) {
     return null; // The useEffect will handle the redirect to dashboard
   }
@@ -205,7 +214,7 @@ export default function Home() {
             <div className="space-y-3">
               <button
                 type="button"
-                onClick={() => setIsRegistering(!isRegistering)}
+                onClick={handleSwitchMode}
                 className="w-full text-sm text-blue-600 hover:text-blue-700 font-medium"
               >
                 {isRegistering
