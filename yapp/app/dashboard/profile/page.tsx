@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { auth, db, storage } from "../../authentication/firebase";
+import { useEffect, useState, useRef } from "react";
+import { auth, db } from "../../authentication/firebase";
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useRouter } from "next/navigation";
 import { User } from 'firebase/auth';
 import Image from 'next/image';
 import Link from 'next/link';
+import ReactCrop, { Crop } from 'react-image-crop';
+import 'react-image-crop/dist/ReactCrop.css';
 
 export default function Profile() {
   const [user, setUser] = useState<User | null>(null);
@@ -26,7 +27,18 @@ export default function Profile() {
   const [previewURL, setPreviewURL] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [crop, setCrop] = useState<Crop>({
+    unit: '%',
+    width: 100,
+    height: 100,
+    x: 0,
+    y: 0
+  });
+  const [completedCrop, setCompletedCrop] = useState<Crop | null>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
   const router = useRouter();
+  const [showCropModal, setShowCropModal] = useState(false);
+  const [originalImage, setOriginalImage] = useState<string | null>(null);
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (user: User | null) => {
@@ -66,16 +78,82 @@ export default function Profile() {
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file && file.type.startsWith('image/')) {
+    if (file) {
+      // Validate file type
+      const validTypes = ['image/jpeg', 'image/png', 'image/svg+xml', 'image/gif', 'image/webp'];
+      if (!validTypes.includes(file.type)) {
+        setError('Please select a valid image file (JPEG, PNG, SVG, GIF, or WebP)');
+        return;
+      }
+      
+      // Validate file size (max 2MB for base64 storage)
+      if (file.size > 2 * 1024 * 1024) {
+        setError('Image size should be less than 2MB');
+        return;
+      }
+
       setSelectedFile(file);
       const preview = URL.createObjectURL(file);
-      setPreviewURL(preview);
+      setOriginalImage(preview);
+      setShowCropModal(true);
       setError(null);
-    } else {
-      setError('Please select a valid image file');
-      setSelectedFile(null);
-      setPreviewURL(null);
     }
+  };
+
+  const handleCropComplete = async () => {
+    if (imgRef.current && completedCrop) {
+      try {
+        const croppedImageUrl = await getCroppedImg(imgRef.current, completedCrop);
+        setPreviewURL(croppedImageUrl);
+      } catch (error) {
+        console.error('Error cropping image:', error);
+        setError('Failed to crop image. Please try again.');
+      }
+    }
+    
+    if (originalImage) {
+      URL.revokeObjectURL(originalImage);
+      setOriginalImage(null);
+    }
+    setShowCropModal(false);
+  };
+
+  const getCroppedImg = (image: HTMLImageElement, crop: Crop): Promise<string> => {
+    const canvas = document.createElement('canvas');
+    const scaleX = image.naturalWidth / image.width;
+    const scaleY = image.naturalHeight / image.height;
+    canvas.width = crop.width!;
+    canvas.height = crop.height!;
+    const ctx = canvas.getContext('2d');
+
+    if (!ctx) {
+      throw new Error('No 2d context');
+    }
+
+    ctx.drawImage(
+      image,
+      crop.x! * scaleX,
+      crop.y! * scaleY,
+      crop.width! * scaleX,
+      crop.height! * scaleY,
+      0,
+      0,
+      crop.width!,
+      crop.height!
+    );
+
+    return new Promise((resolve) => {
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          throw new Error('Canvas is empty');
+        }
+        const reader = new FileReader();
+        reader.readAsDataURL(blob);
+        reader.onloadend = () => {
+          resolve(reader.result as string);
+        };
+      }, 'image/jpeg', 0.8); // Reduced quality to keep size smaller
+    });
   };
 
   const handleSave = async () => {
@@ -86,15 +164,9 @@ export default function Profile() {
     try {
       let photoURL = profileData.photoURL;
 
-      if (selectedFile) {
-        try {
-          const storageRef = ref(storage, `profile-photos/${user.uid}/${selectedFile.name}`);
-          await uploadBytes(storageRef, selectedFile);
-          photoURL = await getDownloadURL(storageRef);
-        } catch (uploadError) {
-          console.error('Error uploading image:', uploadError);
-          throw new Error('Failed to upload profile photo. Please try again.');
-        }
+      // If we have a preview URL (cropped image), use that
+      if (previewURL) {
+        photoURL = previewURL;
       }
 
       const userRef = doc(db, 'users', user.uid);
@@ -118,8 +190,8 @@ export default function Profile() {
         setPreviewURL(null);
       }
       
+      setIsEditing(false);
       await fetchProfileData(user.uid);
-      router.push('/dashboard/profile');
     } catch (error: any) {
       console.error('Error updating profile:', error);
       setError(error.message || 'Failed to update profile');
@@ -208,7 +280,7 @@ export default function Profile() {
                       {selectedFile ? 'Change Photo' : 'Select Photo'}
                       <input
                         type="file"
-                        accept="image/*"
+                        accept="image/jpeg,image/png,image/svg+xml,image/gif,image/webp"
                         className="hidden"
                         onChange={handleFileSelect}
                       />
@@ -292,6 +364,52 @@ export default function Profile() {
           </div>
         </div>
       </div>
+
+      {/* Crop Modal */}
+      {showCropModal && originalImage && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4">
+            <h2 className="text-xl font-bold text-[#6c5ce7] mb-4">Crop your profile photo</h2>
+            <div className="relative w-full max-w-lg mx-auto aspect-square">
+              <ReactCrop
+                crop={crop}
+                onChange={(c: Crop) => setCrop(c)}
+                onComplete={(c: Crop) => setCompletedCrop(c)}
+                aspect={1}
+                className="max-w-full max-h-full"
+              >
+                <img
+                  ref={imgRef}
+                  src={originalImage}
+                  alt="Profile preview"
+                  className="max-w-full max-h-full object-contain"
+                />
+              </ReactCrop>
+            </div>
+            <div className="mt-4 flex justify-end space-x-4">
+              <button
+                onClick={() => {
+                  setShowCropModal(false);
+                  setSelectedFile(null);
+                  if (originalImage) {
+                    URL.revokeObjectURL(originalImage);
+                    setOriginalImage(null);
+                  }
+                }}
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCropComplete}
+                className="px-4 py-2 bg-[#6c5ce7] text-white rounded-md hover:bg-[#5a4bc7] transition-colors"
+              >
+                Apply Crop
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Bottom banner */}
       <div className="fixed bottom-0 left-0 right-0 bg-[#6c5ce7] text-white p-4 text-center shadow-lg">
