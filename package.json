@@ -1,6 +1,8 @@
 {
   "dependencies": {
     "firebase": "^11.4.0",
-    "mongodb": "^6.15.0"
+    "firebase-admin": "^13.2.0",
+    "mongodb": "^6.15.0",
+    "next-auth": "^4.24.11"
   }
 }
