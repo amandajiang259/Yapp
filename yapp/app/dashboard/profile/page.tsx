@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { auth, db } from "../../authentication/firebase";
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { useRouter } from "next/navigation";
 import { User } from 'firebase/auth';
 import Image from 'next/image';
@@ -39,6 +39,9 @@ export default function Profile() {
   const router = useRouter();
   const [showCropModal, setShowCropModal] = useState(false);
   const [originalImage, setOriginalImage] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'photos' | 'videos' | 'stories'>('photos');
+  const [posts, setPosts] = useState<any[]>([]);
+  const [isLoadingPosts, setIsLoadingPosts] = useState(false);
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (user: User | null) => {
@@ -208,12 +211,39 @@ export default function Profile() {
     };
   }, [previewURL]);
 
+  const fetchPosts = async (userId: string) => {
+    setIsLoadingPosts(true);
+    try {
+      const postsQuery = query(
+        collection(db, 'posts'),
+        where('userId', '==', userId)
+      );
+      const querySnapshot = await getDocs(postsQuery);
+      const postsData = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setPosts(postsData);
+    } catch (error) {
+      console.error('Error fetching posts:', error);
+      setError('Failed to load posts');
+    } finally {
+      setIsLoadingPosts(false);
+    }
+  };
+
+  useEffect(() => {
+    if (user) {
+      fetchPosts(user.uid);
+    }
+  }, [user]);
+
   if (!user) {
     return null;
   }
 
   return (
-    <div className="min-h-screen bg-[#f6ebff]">
+    <div className="min-h-screen bg-[#f6ebff] flex flex-col">
       {/* Navigation */}
       <nav className="bg-[#6c5ce7] shadow-lg">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -254,8 +284,8 @@ export default function Profile() {
       </nav>
 
       {/* Main Content */}
-      <div className="py-12">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+      <main className="flex-1 overflow-y-auto pb-16">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="bg-white rounded-lg shadow-lg p-8">
             <h1 className="text-2xl font-bold text-[#6c5ce7] mb-6 text-center">Profile</h1>
             
@@ -362,7 +392,117 @@ export default function Profile() {
               </div>
             </div>
           </div>
+
+          {/* Posts Section */}
+          <div className="bg-white rounded-lg shadow-lg p-6 mt-8">
+            <div className="flex border-b border-gray-200 mb-6">
+              <button
+                onClick={() => setActiveTab('photos')}
+                className={`px-4 py-2 font-medium text-sm ${
+                  activeTab === 'photos'
+                    ? 'text-[#6c5ce7] border-b-2 border-[#6c5ce7]'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Photos
+              </button>
+              <button
+                onClick={() => setActiveTab('videos')}
+                className={`px-4 py-2 font-medium text-sm ${
+                  activeTab === 'videos'
+                    ? 'text-[#6c5ce7] border-b-2 border-[#6c5ce7]'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Videos
+              </button>
+              <button
+                onClick={() => setActiveTab('stories')}
+                className={`px-4 py-2 font-medium text-sm ${
+                  activeTab === 'stories'
+                    ? 'text-[#6c5ce7] border-b-2 border-[#6c5ce7]'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Stories
+              </button>
+            </div>
+
+            {isLoadingPosts ? (
+              <div className="flex justify-center items-center h-32">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#6c5ce7]"></div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {posts
+                  .filter(post => {
+                    if (activeTab === 'photos') return post.type === 'photo';
+                    if (activeTab === 'videos') return post.type === 'video';
+                    if (activeTab === 'stories') return post.type === 'story';
+                    return false;
+                  })
+                  .map(post => (
+                    <div key={post.id} className="bg-[#f6ebff] rounded-lg p-4">
+                      {post.type === 'photo' && (
+                        <div className="relative aspect-square">
+                          <Image
+                            src={post.content}
+                            alt="Post photo"
+                            fill
+                            className="rounded-lg object-cover"
+                          />
+                        </div>
+                      )}
+                      {post.type === 'video' && (
+                        <div className="relative aspect-video">
+                          <video
+                            src={post.content}
+                            controls
+                            className="rounded-lg w-full h-full object-cover"
+                          />
+                        </div>
+                      )}
+                      {post.type === 'story' && (
+                        <div className="space-y-2">
+                          <p className="text-gray-700">{post.content}</p>
+                          {post.tags && (
+                            <div className="flex flex-wrap gap-2">
+                              {post.tags.map((tag: string) => (
+                                <span
+                                  key={tag}
+                                  className="px-2 py-1 bg-[#6c5ce7] text-white text-xs rounded-full"
+                                >
+                                  #{tag}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      <div className="mt-2 text-sm text-gray-500">
+                        {new Date(post.createdAt).toLocaleDateString()}
+                      </div>
+                    </div>
+                  ))}
+                {posts.filter(post => {
+                  if (activeTab === 'photos') return post.type === 'photo';
+                  if (activeTab === 'videos') return post.type === 'video';
+                  if (activeTab === 'stories') return post.type === 'story';
+                  return false;
+                }).length === 0 && (
+                  <div className="col-span-full text-center text-gray-500 py-8">
+                    No {activeTab} posts yet
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
+      </main>
+
+      {/* Bottom banner */}
+      <div className="fixed bottom-0 left-0 right-0 bg-[#6c5ce7] text-white p-4 text-center shadow-lg z-10">
+        <p>Welcome to Yapp! Share your positive affirmations and creative stories!</p>
       </div>
 
       {/* Crop Modal */}
@@ -410,11 +550,6 @@ export default function Profile() {
           </div>
         </div>
       )}
-
-      {/* Bottom banner */}
-      <div className="fixed bottom-0 left-0 right-0 bg-[#6c5ce7] text-white p-4 text-center shadow-lg">
-        <p>Welcome to Yapp! Share your positive affirmations and creative stories!</p>
-      </div>
     </div>
   );
 }
