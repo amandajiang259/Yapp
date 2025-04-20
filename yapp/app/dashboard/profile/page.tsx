@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { auth, db } from "../../authentication/firebase";
-import { doc, getDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, collection, query, where, getDocs, deleteDoc } from 'firebase/firestore';
 import { useRouter } from "next/navigation";
 import { User } from 'firebase/auth';
 import Image from 'next/image';
@@ -237,6 +237,25 @@ export default function Profile() {
       fetchPosts(user.uid);
     }
   }, [user]);
+
+  const handleDeletePost = async (postId: string) => {
+    if (!user) return;
+    
+    if (!confirm('Are you sure you want to delete this post?')) {
+      return;
+    }
+
+    try {
+      const postRef = doc(db, 'posts', postId);
+      await deleteDoc(postRef);
+      
+      // Update the posts state to remove the deleted post
+      setPosts(prevPosts => prevPosts.filter(post => post.id !== postId));
+    } catch (error) {
+      console.error('Error deleting post:', error);
+      setError('Failed to delete post');
+    }
+  };
 
   if (!user) {
     return null;
@@ -479,8 +498,20 @@ export default function Profile() {
                           )}
                         </div>
                       )}
-                      <div className="mt-2 text-sm text-gray-500">
-                        {new Date(post.createdAt).toLocaleDateString()}
+                      <div className="mt-2 flex justify-between items-center">
+                        <div className="text-sm text-gray-500">
+                          {post.createdAt ? new Date(post.createdAt.seconds * 1000).toLocaleDateString('en-US', {
+                            month: 'numeric',
+                            day: 'numeric',
+                            year: 'numeric'
+                          }) : 'No date'}
+                        </div>
+                        <button
+                          onClick={() => handleDeletePost(post.id)}
+                          className="text-red-500 hover:text-red-700 text-sm"
+                        >
+                          Delete
+                        </button>
                       </div>
                     </div>
                   ))}

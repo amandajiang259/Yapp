@@ -93,9 +93,11 @@ export default function Dashboard() {
               <div className="bg-[#f6ebff] rounded-lg p-4 border border-[#ab9dd3]">
                 <h3 className="text-[#6c5ce7] font-semibold mb-2">Create New Story</h3>
                 <p className="text-gray-600 mb-4">Share your thoughts and experiences...</p>
-                <button className="bg-[#68baa5] text-white px-4 py-2 rounded-md hover:bg-[#5aa594] transition-colors w-full">
-                  Start Writing
-                </button>
+                <Link href="/dashboard/create-post" className="block">
+                  <button className="bg-[#68baa5] text-white px-4 py-2 rounded-md hover:bg-[#5aa594] transition-colors w-full">
+                    Start Writing
+                  </button>
+                </Link>
               </div>
               <div className="bg-[#f6ebff] rounded-lg p-4 border border-[#ab9dd3]">
                 <h3 className="text-[#6c5ce7] font-semibold mb-2">Daily Affirmation</h3>
