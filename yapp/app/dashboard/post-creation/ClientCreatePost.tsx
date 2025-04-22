@@ -1,5 +1,6 @@
 "use client";
 
+import ImageUploader from "@/components/ImageUploader";
 import { useEffect, useState } from "react";
 import { auth, signOut, db } from "../../authentication/firebase";
 import { useRouter } from "next/navigation";
@@ -131,6 +132,9 @@ export default function CreatePost() {
                 Submit Post
               </button>
             </form>
+            <div class-name="p-10">
+              <ImageUploader />
+            </div>
           </div>
         </main>
 
