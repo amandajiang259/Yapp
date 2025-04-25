@@ -7,6 +7,38 @@ import { User } from 'firebase/auth';
 import Link from 'next/link';
 import { doc, getDoc } from 'firebase/firestore';
 
+const AFFIRMATIONS = [
+  "I am capable of achieving my goals.",
+  "I choose to focus on the positive.",
+  "I am worthy of love and respect.",
+  "I embrace challenges as opportunities for growth.",
+  "I am confident in my abilities.",
+  "I am grateful for all that I have.",
+  "I am making progress every day.",
+  "I believe in myself and my dreams.",
+  "I am strong and resilient.",
+  "I am creating a life I love."
+];
+
+const WEEKLY_PROMPTS = [
+  "What are you most grateful for this week?",
+  "Share a moment that made you smile recently.",
+  "What's something new you learned this week?",
+  "Describe a challenge you overcame.",
+  "What's a small victory you're proud of?",
+  "Share a positive change you've noticed in yourself.",
+  "What's something you're looking forward to?"
+];
+
+function generateWeeklyPrompt(): string {
+  const now = new Date();
+  const oneJan = new Date(now.getFullYear(), 0, 1);
+  const days = Math.floor((now.getTime() - oneJan.getTime()) / (1000 * 60 * 60 * 24));
+  const week = Math.ceil((days + oneJan.getDay() + 1) / 7);
+  const index = week % WEEKLY_PROMPTS.length;
+  return WEEKLY_PROMPTS[index];
+}
+
 export default function Dashboard() {
   const [user, setUser] = useState<User | null>(null);
   const [firstName, setFirstName] = useState<string>('');

@@ -101,9 +101,13 @@ export default function SearchPage() {
   };
 
   useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged(async (user) => {
       if (!user) {
         router.push('/');
-      } else {
+        return;
+      }
+      
+      try {
         setCurrentUser(user);
         // Fetch user profile data
         const userDoc = await getDoc(doc(db, 'users', user.uid));
@@ -113,10 +117,15 @@ export default function SearchPage() {
             ...userDoc.data()
           } as UserData);
         }
+      } catch (error) {
+        console.error('Error fetching user data:', error);
+        setError('Failed to load user data');
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+    };
   }, [router]);
 
   const handleLogout = async () => {
@@ -128,8 +137,14 @@ export default function SearchPage() {
   };
 
   const handleSearch = async () => {
+    if (!currentUser) {
+      setError('Please log in to search');
+      return;
+    }
+
     if (!searchQuery.trim() && selectedTags.length === 0) return;
     setIsLoading(true);
+    setError(null);
 
     try {
       if (searchType === 'users') {
@@ -142,7 +157,7 @@ export default function SearchPage() {
           })) as AppUser[];
         
         const filteredUsers = users.filter(user => 
-          user.username && user.username.toLowerCase().includes(searchQuery.toLowerCase())
+          user.username && user.username.toLowerCase().startsWith(searchQuery.toLowerCase())
         );
         setSearchResults(filteredUsers);
       } else {
