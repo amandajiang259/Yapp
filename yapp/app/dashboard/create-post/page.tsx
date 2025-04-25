@@ -24,6 +24,7 @@ import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin';
 import { $getRoot, $getSelection } from 'lexical';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import ToolbarPlugin from './ToolbarPlugin';
+import ImageUploader from "@/components/retreiveImage";
 import './editor.css';
 
 const INTERESTS = [
