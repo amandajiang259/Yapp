@@ -28,6 +28,14 @@ interface Conversation {
   };
 }
 
+interface User {
+  id: string;
+  username: string;
+  firstName: string;
+  lastName: string;
+  photoURL: string;
+}
+
 export default function Messages() {
   const router = useRouter();
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -36,6 +44,9 @@ export default function Messages() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [showNewConversationModal, setShowNewConversationModal] = useState(false);
+  const [users, setUsers] = useState<User[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -113,6 +124,76 @@ export default function Messages() {
 
     return () => unsubscribe();
   }, [selectedConversation, currentUser]);
+
+  const fetchUsers = async () => {
+    if (!currentUser) return;
+    
+    const usersRef = collection(db, 'users');
+    const q = query(usersRef, where('id', '!=', currentUser.uid));
+    const querySnapshot = await getDocs(q);
+    const usersData = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as User[];
+    setUsers(usersData);
+  };
+
+  const startNewConversation = async (selectedUser: User) => {
+    if (!currentUser) return;
+
+    try {
+      // Check if conversation already exists
+      const existingConversation = conversations.find(conv => 
+        conv.participants.includes(selectedUser.id)
+      );
+
+      if (existingConversation) {
+        setSelectedConversation(existingConversation);
+        setShowNewConversationModal(false);
+        return;
+      }
+
+      // Create new conversation
+      const conversationsRef = collection(db, 'conversations');
+      const newConversation = await addDoc(conversationsRef, {
+        participants: [currentUser.uid, selectedUser.id],
+        lastMessage: {
+          id: 'initial',
+          text: 'Conversation started',
+          createdAt: serverTimestamp(),
+          senderId: currentUser.uid,
+          receiverId: selectedUser.id,
+          senderName: currentUser.displayName,
+          senderPhotoURL: currentUser.photoURL
+        }
+      });
+
+      // Create the conversation object
+      const conversation: Conversation = {
+        id: newConversation.id,
+        participants: [currentUser.uid, selectedUser.id],
+        lastMessage: {
+          id: 'initial',
+          text: 'Conversation started',
+          createdAt: serverTimestamp(),
+          senderId: currentUser.uid,
+          receiverId: selectedUser.id,
+          senderName: currentUser.displayName,
+          senderPhotoURL: currentUser.photoURL
+        },
+        otherUser: {
+          id: selectedUser.id,
+          username: selectedUser.username,
+          photoURL: selectedUser.photoURL || '/default-avatar.svg'
+        }
+      };
+
+      setSelectedConversation(conversation);
+      setShowNewConversationModal(false);
+    } catch (error) {
+      console.error('Error starting new conversation:', error);
+    }
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -214,8 +295,17 @@ export default function Messages() {
           <div className="flex h-[calc(100vh-12rem)]">
             {/* Conversations list */}
             <div className="w-1/3 border-r border-gray-200 overflow-y-auto">
-              <div className="p-4 border-b border-gray-200">
+              <div className="p-4 border-b border-gray-200 flex justify-between items-center">
                 <h2 className="text-xl font-bold text-[#6c5ce7]">Messages</h2>
+                <button
+                  onClick={() => {
+                    setShowNewConversationModal(true);
+                    fetchUsers();
+                  }}
+                  className="px-3 py-1 bg-[#6c5ce7] text-white rounded-md hover:bg-[#5a4dc7] transition-colors text-sm"
+                >
+                  New Conversation
+                </button>
               </div>
               <div className="divide-y divide-gray-200">
                 {conversations.map((conversation) => (
@@ -230,7 +320,7 @@ export default function Messages() {
                       <div className="relative w-10 h-10">
                         <Image
                           src={conversation.otherUser.photoURL}
-                          alt={conversation.otherUser.username}
+                          alt={`${conversation.otherUser.username}'s profile picture`}
                           fill
                           className="rounded-full object-cover"
                         />
@@ -259,7 +349,7 @@ export default function Messages() {
                       <div className="relative w-10 h-10">
                         <Image
                           src={selectedConversation.otherUser.photoURL}
-                          alt={selectedConversation.otherUser.username}
+                          alt={`${selectedConversation.otherUser.username}'s profile picture`}
                           fill
                           className="rounded-full object-cover"
                         />
@@ -324,6 +414,61 @@ export default function Messages() {
           </div>
         </div>
       </div>
+
+      {/* New Conversation Modal */}
+      {showNewConversationModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-[#6c5ce7]">Start New Conversation</h2>
+              <button
+                onClick={() => setShowNewConversationModal(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="mb-4">
+              <input
+                type="text"
+                placeholder="Search users..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#6c5ce7]"
+              />
+            </div>
+            <div className="max-h-96 overflow-y-auto">
+              {users
+                .filter(user => 
+                  user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                  `${user.firstName} ${user.lastName}`.toLowerCase().includes(searchTerm.toLowerCase())
+                )
+                .map(user => (
+                  <div
+                    key={user.id}
+                    className="flex items-center space-x-3 p-3 hover:bg-gray-50 rounded-lg cursor-pointer"
+                    onClick={() => startNewConversation(user)}
+                  >
+                    <div className="relative w-10 h-10">
+                      <Image
+                        src={user.photoURL || '/default-avatar.svg'}
+                        alt={`${user.firstName} ${user.lastName}'s profile picture`}
+                        fill
+                        className="rounded-full object-cover"
+                      />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-[#6c5ce7]">{user.username}</h3>
+                      <p className="text-sm text-gray-500">
+                        {user.firstName} {user.lastName}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Bottom banner */}
       <div className="fixed bottom-0 left-0 right-0 bg-[#6c5ce7] text-white p-4 text-center shadow-lg">
