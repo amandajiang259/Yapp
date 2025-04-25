@@ -27,6 +27,7 @@ import { $generateNodesFromDOM } from '@lexical/html';
 import { $convertFromMarkdownString } from '@lexical/markdown';
 import ToolbarPlugin from './ToolbarPlugin';
 import './editor.css';
+import ImageUploader from "@/components/retreiveImage";
 import { $generateHtmlFromNodes } from '@lexical/html';
 
 const INTERESTS = [
@@ -254,7 +255,12 @@ function EditorContent() {
                     </div>
                   </div>
                 </div>
-
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Upload Image
+                </label>
+                  <ImageUploader userId={user?.uid} tags={selectedTags} />
+              </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Tags (Select up to 3)
@@ -279,7 +285,6 @@ function EditorContent() {
                     {selectedTags.length}/3 tags selected
                   </p>
                 </div>
-
                 <div className="flex justify-end">
                   <button
                     type="submit"
