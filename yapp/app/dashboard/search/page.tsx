@@ -2,12 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import { auth, db } from '../../authentication/firebase';
-import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { User } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
 
 const interests = [
   'Technology', 'Sports', 'Music', 'Art', 'Travel', 'Food', 'Fashion',
@@ -24,35 +23,37 @@ interface Post {
   type: string;
 }
 
+interface AppUser {
+  id: string;
+  username: string;
+  photoURL: string;
+  bio?: string;
+}
+
 interface UserProfile {
+  id: string;
   username: string;
   photoURL: string;
   bio?: string;
 }
 
 export default function SearchPage() {
+  const router = useRouter();
+  const [currentUser, setCurrentUser] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [searchType, setSearchType] = useState<'users' | 'posts'>('users');
-  const [searchResults, setSearchResults] = useState<Post[]>([]);
+  const [searchResults, setSearchResults] = useState<(Post | AppUser)[]>([]);
+  const [userProfiles, setUserProfiles] = useState<Record<string, UserProfile>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [user, setUser] = useState<User | null>(null);
-  const [firstName, setFirstName] = useState<string>('');
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
-  const [userProfiles, setUserProfiles] = useState<Record<string, UserProfile>>({});
-  const router = useRouter();
 
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged(async (user: User | null) => {
+    const unsubscribe = auth.onAuthStateChanged((user) => {
       if (!user) {
         router.push('/');
       } else {
-        setUser(user);
-        // Fetch user profile data
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
-        if (userDoc.exists()) {
-          setFirstName(userDoc.data().firstName);
-        }
+        setCurrentUser(user);
       }
     });
 
@@ -69,14 +70,10 @@ export default function SearchPage() {
 
   const handleSearch = async () => {
     if (!searchTerm.trim()) return;
-
     setIsLoading(true);
-    setError(null);
-    setSearchResults([]);
 
     try {
       if (searchType === 'users') {
-        // Search for users by username (letter by letter)
         const usersRef = collection(db, 'users');
         const q = query(
           usersRef,
@@ -84,51 +81,48 @@ export default function SearchPage() {
           where('username', '<=', searchTerm.toLowerCase() + '\uf8ff')
         );
         const querySnapshot = await getDocs(q);
-        const results = querySnapshot.docs.map(doc => ({
+        const users = querySnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
-        }));
-        setSearchResults(results);
+        })) as AppUser[];
+        setSearchResults(users);
       } else {
-        // Search for posts by tags
         const postsRef = collection(db, 'posts');
         const q = query(
           postsRef,
-          where('tags', 'array-contains', searchTerm),
-          orderBy('createdAt', 'desc')
+          where('tags', 'array-contains', searchTerm)
         );
         const querySnapshot = await getDocs(q);
-        const results = querySnapshot.docs.map(doc => ({
+        const posts = querySnapshot.docs.map(doc => ({
           id: doc.id,
-          userId: doc.data().userId,
-          content: doc.data().content,
-          tags: doc.data().tags,
-          createdAt: doc.data().createdAt,
-          type: doc.data().type
+          ...doc.data()
         })) as Post[];
-        
-        // Fetch user profiles for all posts
-        const userIds = results.map(post => post.userId);
-        const uniqueUserIds = [...new Set(userIds)];
-        const userProfilesData: Record<string, UserProfile> = {};
-        
-        for (const userId of uniqueUserIds) {
+        setSearchResults(posts);
+
+        // Fetch user profiles for posts
+        const userIds = [...new Set(posts.map(post => post.userId))];
+        const userPromises = userIds.map(async (userId) => {
           const userDoc = await getDoc(doc(db, 'users', userId));
           if (userDoc.exists()) {
-            userProfilesData[userId] = {
-              username: userDoc.data().username,
-              photoURL: userDoc.data().photoURL,
-              bio: userDoc.data().bio
-            };
+            return {
+              id: userDoc.id,
+              ...userDoc.data()
+            } as UserProfile;
           }
-        }
-        
-        setUserProfiles(userProfilesData);
-        setSearchResults(results);
+          return null;
+        });
+
+        const userResults = await Promise.all(userPromises);
+        const userProfilesMap = userResults.reduce((acc, user) => {
+          if (user) {
+            acc[user.id] = user;
+          }
+          return acc;
+        }, {} as Record<string, UserProfile>);
+        setUserProfiles(userProfilesMap);
       }
-    } catch (error: any) {
-      console.error('Search error:', error);
-      setError('Failed to perform search. Please try again.');
+    } catch (error) {
+      console.error('Error searching:', error);
     } finally {
       setIsLoading(false);
     }
@@ -153,7 +147,7 @@ export default function SearchPage() {
     setSearchTerm(tag);
   };
 
-  if (!user) {
+  if (!currentUser) {
     return null;
   }
 
@@ -186,7 +180,7 @@ export default function SearchPage() {
               </div>
             </div>
             <div className="flex items-center space-x-4">
-              <span className="text-white text-sm">Welcome, {firstName}</span>
+              <span className="text-white text-sm">Welcome, {currentUser.displayName}</span>
               <button
                 onClick={handleLogout}
                 className="px-4 py-2 bg-[#68baa5] text-white rounded-md hover:bg-[#5aa594] transition-colors font-medium"
@@ -281,35 +275,35 @@ export default function SearchPage() {
               </div>
             ) : searchResults.length > 0 ? (
               searchType === 'users' ? (
-                // User search results
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {searchResults.map((user) => (
+                <div className="space-y-4">
+                  {(searchResults as AppUser[]).map((user) => (
                     <Link
                       key={user.id}
                       href={`/dashboard/profile/${user.id}`}
-                      className="bg-white rounded-lg shadow-md p-4 hover:shadow-lg transition-shadow"
+                      className="block"
                     >
-                      <div className="flex items-center space-x-4">
-                        <div className="relative w-12 h-12">
-                          <Image
-                            src={user.photoURL || '/default-avatar.svg'}
-                            alt={user.username}
-                            fill
-                            className="rounded-full object-cover"
-                          />
-                        </div>
-                        <div>
-                          <h3 className="font-semibold text-[#6c5ce7]">{user.username}</h3>
-                          <p className="text-gray-600 text-sm">{user.bio || 'No bio available'}</p>
+                      <div className="bg-white rounded-lg shadow-md p-4 hover:shadow-lg transition-shadow">
+                        <div className="flex items-center space-x-4">
+                          <div className="relative w-12 h-12">
+                            <Image
+                              src={user.photoURL || '/default-avatar.svg'}
+                              alt={`${user.username}'s profile picture`}
+                              fill
+                              className="rounded-full object-cover"
+                            />
+                          </div>
+                          <div>
+                            <h3 className="font-semibold text-[#6c5ce7]">{user.username}</h3>
+                            <p className="text-gray-600 text-sm">{user.bio || 'No bio available'}</p>
+                          </div>
                         </div>
                       </div>
                     </Link>
                   ))}
                 </div>
               ) : (
-                // Post search results
                 <div className="space-y-4">
-                  {searchResults.map((post) => {
+                  {(searchResults as Post[]).map((post) => {
                     const userProfile = userProfiles[post.userId];
                     return (
                       <div key={post.id} className="bg-white rounded-lg shadow-md p-4">
@@ -317,7 +311,7 @@ export default function SearchPage() {
                           <div className="relative w-10 h-10">
                             <Image
                               src={userProfile?.photoURL || '/default-avatar.svg'}
-                              alt={userProfile?.username || 'User avatar'}
+                              alt={`${userProfile?.username || 'Unknown User'}'s profile picture`}
                               fill
                               className="rounded-full object-cover"
                             />
