@@ -24,6 +24,7 @@ import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin';
 import { $getRoot, $getSelection } from 'lexical';
 import ToolbarPlugin from './ToolbarPlugin';
 import './editor.css';
+import ImageUploader from "@/components/retreiveImage";
 
 const INTERESTS = [
   "Art", "Music", "Sports", "Technology", "Food", "Travel",
@@ -238,7 +239,12 @@ export default function CreatePost() {
                   </LexicalComposer>
                 </div>
               </div>
-
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Upload Image
+                </label>
+                  <ImageUploader userId={user?.uid} tags={selectedTags} />
+              </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Tags (Select up to 3)
@@ -263,7 +269,6 @@ export default function CreatePost() {
                   {selectedTags.length}/3 tags selected
                 </p>
               </div>
-
               <div className="flex justify-end">
                 <button
                   type="button"
