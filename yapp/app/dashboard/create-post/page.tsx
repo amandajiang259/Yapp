@@ -92,7 +92,7 @@ const initialConfig = {
   ]
 };
 
-function EditorContent() {
+function EditorContent({ user }: { user: User | null }) {
   const [editor] = useLexicalComposerContext();
   const [content, setContent] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -329,7 +329,7 @@ export default function CreatePost() {
 
   return (
     <LexicalComposer initialConfig={initialConfig}>
-      <EditorContent />
+      <EditorContent user={user} />
     </LexicalComposer>
   );
 } 
