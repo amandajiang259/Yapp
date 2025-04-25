@@ -62,7 +62,7 @@ export default function SearchPage() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [searchType, setSearchType] = useState<'users' | 'posts'>('posts');
+  const [searchType, setSearchType] = useState<'users' | 'posts'>('users');
   const [searchResults, setSearchResults] = useState<(Post | AppUser)[]>([]);
   const [userProfiles, setUserProfiles] = useState<Record<string, UserProfile>>({});
   const [isLoading, setIsLoading] = useState(false);
@@ -236,6 +236,10 @@ export default function SearchPage() {
     setSearchType('posts');
     setSearchQuery(tag);
   };
+
+  useEffect(() => {
+    document.title = "Search | Yapp";
+  }, []);
 
   if (!currentUser) {
     return null;

@@ -66,6 +66,10 @@ export default function AffirmationsPage() {
     }
   }, [currentUser]);
 
+  useEffect(() => {
+    document.title = "Weekly Discussion | Yapp";
+  }, []);
+
   const fetchResponses = async () => {
     if (!currentUser) return;
 
