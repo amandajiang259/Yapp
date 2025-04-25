@@ -7,6 +7,12 @@ import { doc, getDoc, collection, query, where, getDocs, orderBy } from 'firebas
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
+import { LexicalComposer } from '@lexical/react/LexicalComposer';
+import { ContentEditable } from '@lexical/react/LexicalContentEditable';
+import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin';
+import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin';
+import { $convertFromMarkdownString } from '@lexical/markdown';
+import React from 'react';
 
 interface UserData {
   id: string;
@@ -26,6 +32,7 @@ interface Post {
   username: string;
   userPhotoURL: string;
   tags: string[];
+  formattedContent?: string;
 }
 
 export default function UserProfile() {
@@ -88,7 +95,9 @@ export default function UserProfile() {
         const querySnapshot = await getDocs(q);
         const userPosts = querySnapshot.docs.map(doc => ({
           id: doc.id,
-          ...doc.data()
+          ...doc.data(),
+          userPhotoURL: userData.photoURL,
+          username: userData.username
         })) as Post[];
         setPosts(userPosts);
       } catch (error) {
@@ -248,7 +257,10 @@ export default function UserProfile() {
                     </p>
                   </div>
                 </div>
-                <p className="text-gray-800 mb-2">{post.content}</p>
+                <div 
+                  className="text-gray-800 mb-2"
+                  dangerouslySetInnerHTML={{ __html: post.content }}
+                />
                 {post.tags && post.tags.length > 0 && (
                   <div className="flex flex-wrap gap-2">
                     {post.tags.map((tag) => (

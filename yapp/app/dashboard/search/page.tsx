@@ -7,6 +7,12 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { User } from 'firebase/auth';
+import { LexicalComposer } from '@lexical/react/LexicalComposer';
+import { ContentEditable } from '@lexical/react/LexicalContentEditable';
+import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin';
+import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin';
+import { $convertFromMarkdownString } from '@lexical/markdown';
+import React from 'react';
 
 const interests = [
   'Technology', 'Sports', 'Music', 'Art', 'Travel', 'Food', 'Fashion',
@@ -21,6 +27,7 @@ interface Post {
   tags: string[];
   createdAt: any;
   type: string;
+  formattedContent?: string;
 }
 
 interface AppUser {
@@ -37,9 +44,19 @@ interface UserProfile {
   bio?: string;
 }
 
+interface UserData {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  photoURL: string;
+  bio?: string;
+}
+
 export default function SearchPage() {
   const router = useRouter();
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [currentUserData, setCurrentUserData] = useState<UserData | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [searchType, setSearchType] = useState<'users' | 'posts'>('users');
   const [searchResults, setSearchResults] = useState<(Post | AppUser)[]>([]);
@@ -49,11 +66,19 @@ export default function SearchPage() {
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
 
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((user) => {
+    const unsubscribe = auth.onAuthStateChanged(async (user) => {
       if (!user) {
         router.push('/');
       } else {
         setCurrentUser(user);
+        // Fetch user profile data
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        if (userDoc.exists()) {
+          setCurrentUserData({
+            id: userDoc.id,
+            ...userDoc.data()
+          } as UserData);
+        }
       }
     });
 
@@ -88,19 +113,24 @@ export default function SearchPage() {
         setSearchResults(filteredUsers);
       } else {
         const postsRef = collection(db, 'posts');
-        const q = query(
-          postsRef,
-          where('tags', 'array-contains', searchTerm)
+        const querySnapshot = await getDocs(postsRef);
+        const posts = querySnapshot.docs
+          .map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          })) as Post[];
+        
+        // Filter posts by tag
+        const filteredPosts = posts.filter(post => 
+          post.tags && post.tags.some(tag => 
+            tag.toLowerCase() === searchTerm.toLowerCase()
+          )
         );
-        const querySnapshot = await getDocs(q);
-        const posts = querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as Post[];
-        setSearchResults(posts);
+        
+        setSearchResults(filteredPosts);
 
         // Fetch user profiles for posts
-        const userIds = [...new Set(posts.map(post => post.userId))];
+        const userIds = [...new Set(filteredPosts.map(post => post.userId))];
         const userPromises = userIds.map(async (userId) => {
           const userDoc = await getDoc(doc(db, 'users', userId));
           if (userDoc.exists()) {
@@ -183,7 +213,7 @@ export default function SearchPage() {
               </div>
             </div>
             <div className="flex items-center space-x-4">
-              <span className="text-white text-sm">Welcome, {currentUser.displayName}</span>
+              <span className="text-white text-sm">Welcome, {currentUserData?.firstName || 'User'}</span>
               <button
                 onClick={handleLogout}
                 className="px-4 py-2 bg-[#68baa5] text-white rounded-md hover:bg-[#5aa594] transition-colors font-medium"
@@ -291,13 +321,13 @@ export default function SearchPage() {
                             <Image
                               src={user.photoURL || '/default-avatar.svg'}
                               alt={`${user.username}'s profile picture`}
-                              fill
-                              className="rounded-full object-cover"
+                              width={48}
+                              height={48}
+                              className="rounded-full"
                             />
                           </div>
                           <div>
-                            <h3 className="font-semibold text-[#6c5ce7]">{user.username}</h3>
-                            <p className="text-gray-600 text-sm">{user.bio || 'No bio available'}</p>
+                            <p className="text-sm font-medium text-[#6c5ce7]">{user.username}</p>
                           </div>
                         </div>
                       </div>
@@ -306,51 +336,39 @@ export default function SearchPage() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {(searchResults as Post[]).map((post) => {
-                    const userProfile = userProfiles[post.userId];
-                    return (
-                      <div key={post.id} className="bg-white rounded-lg shadow-md p-4">
-                        <div className="flex items-center space-x-3 mb-3">
-                          <div className="relative w-10 h-10">
+                  {(searchResults as Post[]).map((post) => (
+                    <Link
+                      key={post.id}
+                      href={`/dashboard/profile/${post.userId}`}
+                      className="block"
+                    >
+                      <div className="bg-white rounded-lg shadow-md p-4 hover:shadow-lg transition-shadow">
+                        <div className="flex items-center space-x-4">
+                          <div className="relative w-12 h-12">
                             <Image
-                              src={userProfile?.photoURL || '/default-avatar.svg'}
-                              alt={`${userProfile?.username || 'Unknown User'}'s profile picture`}
-                              fill
-                              className="rounded-full object-cover"
+                              src={userProfiles[post.userId]?.photoURL || '/default-avatar.svg'}
+                              alt={`${userProfiles[post.userId]?.username}'s profile picture`}
+                              width={48}
+                              height={48}
+                              className="rounded-full"
                             />
                           </div>
                           <div>
-                            <p className="font-semibold text-[#6c5ce7]">
-                              {userProfile?.username || 'Unknown User'}
-                            </p>
-                            <p className="text-sm text-gray-500">
-                              {post.createdAt?.toDate().toLocaleDateString()}
-                            </p>
+                            <p className="text-sm font-medium text-[#6c5ce7]">{userProfiles[post.userId]?.username}</p>
+                            <div 
+                              className="text-gray-600 text-sm"
+                              dangerouslySetInnerHTML={{ __html: post.content }}
+                            />
                           </div>
                         </div>
-                        <p className="text-gray-800">{post.content}</p>
-                        {post.tags && post.tags.length > 0 && (
-                          <div className="flex flex-wrap gap-2 mt-3">
-                            {post.tags.map((tag: string) => (
-                              <span
-                                key={tag}
-                                className="px-2 py-1 bg-[#f6ebff] text-[#6c5ce7] rounded-full text-sm"
-                              >
-                                #{tag}
-                              </span>
-                            ))}
-                          </div>
-                        )}
                       </div>
-                    );
-                  })}
+                    </Link>
+                  ))}
                 </div>
               )
-            ) : searchTerm && !isLoading ? (
-              <div className="text-center text-gray-500 py-8">
-                No results found
-              </div>
-            ) : null}
+            ) : (
+              <p>No results found.</p>
+            )}
           </div>
         </div>
       </main>
@@ -361,4 +379,4 @@ export default function SearchPage() {
       </div>
     </div>
   );
-} 
+}

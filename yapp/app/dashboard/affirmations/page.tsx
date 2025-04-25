@@ -1,209 +1,149 @@
-﻿'use client';
+﻿"use client";
 
 import { useState, useEffect } from 'react';
 import { auth, db } from '../../authentication/firebase';
-import { collection, query, where, getDocs, addDoc, serverTimestamp, orderBy, doc, updateDoc, getDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc, addDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { User as FirebaseUser } from 'firebase/auth';
 import { v4 as uuidv4 } from 'uuid';
+import { WEEKLY_PROMPTS } from '../../constants/prompts';
 
-interface User {
-  id: string;
-  username: string;
-  photoURL?: string;
+function generateWeeklyPrompt(): string {
+  const now = new Date();
+  const oneJan = new Date(now.getFullYear(), 0, 1);
+  const days = Math.floor((now.getTime() - oneJan.getTime()) / (1000 * 60 * 60 * 24));
+  const week = Math.ceil((days + oneJan.getDay() + 1) / 7);
+  const index = week % WEEKLY_PROMPTS.length;
+  return WEEKLY_PROMPTS[index];
 }
 
-interface Response {
+interface UserData {
   id: string;
-  userId: string;
-  username: string;
-  content: string;
-  createdAt: Date;
-  userPhotoURL?: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  photoURL: string;
+  bio?: string;
 }
 
 interface Affirmation {
   id: string;
   userId: string;
-  username: string;
   content: string;
-  createdAt: Date;
-  userPhotoURL?: string;
-  responses: Response[];
-  likes: string[];
+  createdAt: any;
+  userData?: UserData;
 }
 
-const prompts = [
-  "I am grateful for a new day. What was your favorite day of last week and why?",
-  "I am grateful for a new week. Describe your favorite week so far?",
-  "I am feeling healthy and strong today. What are your goals?",
-  "I am a healthy and happy person. What made you happy recently?",
-  "I choose to focus on the good parts of the day. What was the best part of yesterday?",
-  "This is the best day of my life. Describe what you hope for / goals today.",
-  "I am grateful that my life is so happy and successful. What are your future goals?",
-  "I am excited to wake up today and experience this beautiful life that I am creating with my thoughts and visions. What visions will you bring to life?",
-  "I am the creator of my best reality. What did you create most recently?",
-  "I am filled with gratitude and kindness for another wonderful day on this earth. What are your plans for tomorrow?",
-  "I am full of positive loving energy. Post an appreciative message for those in your life.",
-  "Monday, you and I are going to be friends. What social plans are you looking forward to?",
-  "Monday won't run me, I will run it. How do you plan to take charge this week?",
-  "I am feeling better and better this Monday. Describe your most memorable Monday?",
-  "I will put on my positive pants and enjoy my Monday. What inspires you to stay positive?",
-  "Monday mornings are for clean slates and fresh starts. Did you do laundry this week, or plan to soon?",
-  "I will use today to grow as a person. What are some traits you would like to better in yourself?",
-  "This is going to be a productive week. What tasks do you have to complete?",
-  "Money, success, and happiness will flow effortlessly toward me. What are your plans for this week?",
-  "I am ready for an incredible week. What hopes do you have for this week?",
-  "I am a successful and happy person. Describe how success feels to you.",
-  "I choose to be free and happy. What was something your friend did to make you happy?",
-  "I am a healthy and happy person. What do you wish to do outdoors?",
-  "I am willing to be happy now. Describe an act a stranger did to make you feel happy.",
-  "Things will fall into place for me effortlessly this Monday. How do you plan to stay organized this week?",
-  "It's a good day to have a Monday. Describe your plans for the week.",
-  "I see this new week as an opportunity. What new things do you want to try this week?",
-  "This week, I am showing myself love. How are some ways you will show yourself love and care?",
-  "The power is in my hands. I can make Monday anything I choose. What is your 'superpower' or special quality?",
-  "I will make the most out of every minute of this new day, Monday. What is your top priority for this week?",
-  "I am grateful for this new week. Describe a transformation you will create this week.",
-  "I will accomplish all my to-dos this Monday. What is your favorite beverage to start the day and why?",
-  "I am filled with gratitude for a new week. What brings you the most gratitude?",
-  "A new day, a new week and many new opportunities are ahead of me. What do you look for in a fresh start?",
-  "I will start this Monday with positive energy. Which things bring you the most positivity?",
-  "Monday mornings are for clean slates and fresh starts. What type of outdoors experience brings you the most peace?",
-  "I focus my vision on creating a life of true joy and prosperity. What makes you feel prosperous and successful?",
-  "Happiness is always at my fingertips. What snack do you enjoy eating the most and why?",
-  "I deserve to live a joyful, vibrant, passionate life. What are some of your life goals?",
-  "I am worthy and deserving of my beautiful dreams. What is your dream you will bring to life?",
-  "Today is a great day to be alive! What is something exhilarating you want to experience?",
-  "I radiate love and self-confidence. What activity brings you the most self-confidence and why?",
-  "I am humble yet confident. What is an experience that made you feel this way?",
-  "I choose wholeness. What makes you feel whole and grounded?",
-  "I celebrate all of who I am. What celebrations have you participated in recently?",
-  "My imperfections make me beautiful. Describe them and how they make you special.",
-  "I accept everything in my life. What are some blessings you are grateful for?",
-  "I am at peace with myself. Talk about your most peaceful memory.",
-  "I am cool, calm, and collected. What else are some of your positive traits?",
-  "I am allowing myself to feel good. Share how you want to take care of yourself.",
-];
-
-const AffirmationsPage = () => {
+export default function AffirmationsPage() {
   const router = useRouter();
-  const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [currentUserData, setCurrentUserData] = useState<UserData | null>(null);
   const [affirmations, setAffirmations] = useState<Affirmation[]>([]);
-  const [selectedAffirmation, setSelectedAffirmation] = useState<Affirmation | null>(null);
-  const [newResponse, setNewResponse] = useState("");
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [newAffirmation, setNewAffirmation] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [currentPrompt, setCurrentPrompt] = useState('');
 
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((user: FirebaseUser | null) => {
+    const unsubscribe = auth.onAuthStateChanged(async (user) => {
       if (!user) {
         router.push('/');
       } else {
         setCurrentUser(user);
+        // Fetch user profile data
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        if (userDoc.exists()) {
+          setCurrentUserData({
+            id: userDoc.id,
+            ...userDoc.data()
+          } as UserData);
+        }
       }
     });
+
+    // Set the weekly prompt using the same function as the dashboard
+    setCurrentPrompt(generateWeeklyPrompt());
 
     return () => unsubscribe();
   }, [router]);
 
-  useEffect(() => {
-    if (!currentUser) return;
+  const handleLogout = async () => {
+    try {
+      await auth.signOut();
+      router.push('/');
+    } catch (error) {
+      console.error('Error logging out:', error);
+    }
+  };
 
-    const fetchAffirmations = async () => {
-      try {
-        const affirmationsRef = collection(db, 'affirmations');
-        const q = query(affirmationsRef, orderBy('createdAt', 'desc'));
-        const querySnapshot = await getDocs(q);
-        
-        const affirmationsData: Affirmation[] = [];
-        for (const doc of querySnapshot.docs) {
-          const data = doc.data();
-          affirmationsData.push({
-            id: doc.id,
-            userId: data.userId,
-            username: data.username,
-            content: data.content,
-            createdAt: data.createdAt,
-            userPhotoURL: data.userPhotoURL,
-            responses: data.responses || [],
-            likes: data.likes || []
-          });
-        }
-        setAffirmations(affirmationsData);
-      } catch (error) {
-        console.error('Error fetching affirmations:', error);
-        setError('Failed to load affirmations');
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  const createAffirmation = async (content: string) => {
+    if (!currentUserData) return;
 
-    fetchAffirmations();
-  }, [currentUser]);
-
-  const createAffirmation = async (content: string, user: User) => {
     const newAffirmation: Affirmation = {
       id: uuidv4(),
-      userId: user.id,
-      username: user.username,
+      userId: currentUserData.id,
       content: content,
-      createdAt: new Date(),
-      userPhotoURL: user.photoURL || undefined,
-      responses: [],
-      likes: []
+      createdAt: serverTimestamp(),
+      userData: currentUserData
     };
 
     try {
-      await addDoc(collection(db, "affirmations"), newAffirmation);
-      setAffirmations(prev => [newAffirmation, ...prev]);
-      setNewResponse("");
+      await addDoc(collection(db, 'affirmations'), newAffirmation);
+      setNewAffirmation('');
+      fetchAffirmations();
     } catch (error) {
-      console.error("Error creating affirmation:", error);
+      console.error('Error creating affirmation:', error);
+      setError('Failed to create affirmation');
     }
   };
 
-  const handleSubmitResponse = async () => {
-    if (!currentUser || !selectedAffirmation || !newResponse.trim()) return;
+  const fetchAffirmations = async () => {
+    if (!currentUser) return;
+
+    setIsLoading(true);
+    try {
+      const q = query(collection(db, 'affirmations'), where('userId', '==', currentUser.uid));
+      const querySnapshot = await getDocs(q);
+      const affirmationsData: Affirmation[] = [];
+      
+      for (const docSnapshot of querySnapshot.docs) {
+        const data = docSnapshot.data();
+        affirmationsData.push({
+          id: docSnapshot.id,
+          userId: data.userId,
+          content: data.content,
+          createdAt: data.createdAt,
+          userData: data.userData
+        });
+      }
+      
+      setAffirmations(affirmationsData);
+    } catch (error) {
+      console.error('Error fetching affirmations:', error);
+      setError('Failed to fetch affirmations');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const deleteAffirmation = async (affirmationId: string) => {
+    if (!currentUser) return;
 
     try {
-      const userDoc = await getDocs(query(collection(db, 'users'), where('id', '==', currentUser.uid)));
-      const userData = userDoc.docs[0]?.data();
-
-      const updatedResponses = [
-        ...selectedAffirmation.responses,
-        {
-          id: Date.now().toString(),
-          userId: currentUser.uid,
-          username: userData?.username || 'Anonymous',
-          content: newResponse,
-          createdAt: new Date(),
-          userPhotoURL: userData?.photoURL || '/default-avatar.svg'
-        }
-      ];
-
-      const affirmationRef = doc(db, 'affirmations', selectedAffirmation.id);
-      await updateDoc(affirmationRef, {
-        responses: updatedResponses
-      });
-
-      setNewResponse('');
-      setSelectedAffirmation({
-        ...selectedAffirmation,
-        responses: updatedResponses
-      });
+      await deleteDoc(doc(db, 'affirmations', affirmationId));
+      setAffirmations(prev => prev.filter(aff => aff.id !== affirmationId));
     } catch (error) {
-      console.error('Error submitting response:', error);
-      setError('Failed to submit response');
+      console.error('Error deleting affirmation:', error);
+      setError('Failed to delete affirmation');
     }
   };
 
-  if (!currentUser) {
-    return null;
-  }
+  useEffect(() => {
+    if (currentUser) {
+      fetchAffirmations();
+    }
+  }, [currentUser]);
 
   return (
     <div className="min-h-screen bg-[#f6ebff]">
@@ -237,9 +177,9 @@ const AffirmationsPage = () => {
               </div>
             </div>
             <div className="flex items-center space-x-4">
-              <span className="text-white text-sm">Welcome, {currentUser.displayName}</span>
+              <span className="text-white text-sm">Welcome, {currentUserData?.firstName || 'User'}</span>
               <button
-                onClick={() => auth.signOut()}
+                onClick={handleLogout}
                 className="px-4 py-2 bg-[#68baa5] text-white rounded-md hover:bg-[#5aa594] transition-colors font-medium"
               >
                 Logout
@@ -252,109 +192,82 @@ const AffirmationsPage = () => {
       {/* Main content */}
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
-          <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-            <div className="flex justify-between items-center mb-6">
-              <h1 className="text-2xl font-bold text-[#6c5ce7]">Daily Affirmations</h1>
-              <button
-                onClick={() => createAffirmation(prompts[Math.floor(Math.random() * prompts.length)], { 
-                  id: currentUser?.uid || '', 
-                  username: currentUser?.displayName || 'Anonymous', 
-                  photoURL: currentUser?.photoURL || undefined 
-                })}
-                className="px-4 py-2 bg-[#6c5ce7] text-white rounded-md hover:bg-[#5a4dc7] transition-colors"
-              >
-                Create New Affirmation
-              </button>
-            </div>
-
-            {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-lg mb-6">
-                {error}
-              </div>
-            )}
-
-            <div className="space-y-6">
-              {isLoading ? (
-                <div className="flex justify-center">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#6c5ce7]"></div>
-                </div>
-              ) : affirmations.length > 0 ? (
-                affirmations.map((affirmation) => (
-                  <div
-                    key={affirmation.id}
-                    className="bg-[#f6ebff] rounded-lg p-4 cursor-pointer hover:shadow-md transition-shadow"
-                    onClick={() => setSelectedAffirmation(affirmation)}
-                  >
-                    <h3 className="text-lg font-semibold text-[#6c5ce7] mb-2">
-                      {affirmation.content}
-                    </h3>
-                    <p className="text-sm text-gray-500">
-                      {affirmation.responses.length} responses
-                    </p>
-                  </div>
-                ))
-              ) : (
-                <div className="text-center text-gray-500 py-8">
-                  No affirmations yet. Create one to get started!
-                </div>
-              )}
-            </div>
+          {/* Weekly prompt */}
+          <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h2 className="text-xl font-semibold text-[#6c5ce7] mb-4">Weekly Prompt</h2>
+            <p className="text-gray-700 mb-4">{currentPrompt}</p>
+            <button
+              onClick={() => createAffirmation(currentPrompt)}
+              className="px-4 py-2 bg-[#6c5ce7] text-white rounded-md hover:bg-[#5a4dc7] transition-colors"
+            >
+              Respond to Prompt
+            </button>
           </div>
 
-          {/* Selected Affirmation Modal */}
-          {selectedAffirmation && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-              <div className="bg-white rounded-lg p-6 w-full max-w-2xl">
-                <div className="flex justify-between items-center mb-4">
-                  <h2 className="text-xl font-bold text-[#6c5ce7]">
-                    {selectedAffirmation.content}
-                  </h2>
-                  <button
-                    onClick={() => setSelectedAffirmation(null)}
-                    className="text-gray-500 hover:text-gray-700"
-                  >
-                    ✕
-                  </button>
-                </div>
+          {/* Create new affirmation */}
+          <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h2 className="text-xl font-semibold text-[#6c5ce7] mb-4">Create New Affirmation</h2>
+            <textarea
+              value={newAffirmation}
+              onChange={(e) => setNewAffirmation(e.target.value)}
+              placeholder="Share your thoughts..."
+              className="w-full p-4 border rounded-md mb-4"
+              rows={4}
+            />
+            <button
+              onClick={() => createAffirmation(newAffirmation)}
+              disabled={!newAffirmation.trim()}
+              className="px-4 py-2 bg-[#6c5ce7] text-white rounded-md hover:bg-[#5a4dc7] transition-colors disabled:opacity-50"
+            >
+              Post Affirmation
+            </button>
+          </div>
 
-                <div className="space-y-4 mb-6">
-                  {selectedAffirmation.responses.map((response) => (
-                    <div key={response.id} className="bg-[#f6ebff] rounded-lg p-4">
-                      <div className="flex items-center space-x-3 mb-2">
-                        <div className="relative w-8 h-8">
-                          <Image
-                            src={response.userPhotoURL || '/default-avatar.png'}
-                            alt={`${response.username}'s profile picture`}
-                            fill
-                            className="rounded-full object-cover"
-                          />
-                        </div>
-                        <span className="font-semibold text-[#6c5ce7]">
-                          {response.username}
+          {/* Affirmations list */}
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h2 className="text-xl font-semibold text-[#6c5ce7] mb-4">Your Affirmations</h2>
+            {isLoading ? (
+              <p>Loading affirmations...</p>
+            ) : error ? (
+              <p className="text-red-500">{error}</p>
+            ) : affirmations.length === 0 ? (
+              <p>No affirmations yet. Start by creating one!</p>
+            ) : (
+              <div className="space-y-4">
+                {affirmations.map((affirmation) => (
+                  <div key={affirmation.id} className="border rounded-lg p-4">
+                    <div className="flex justify-between items-start mb-2">
+                      <div className="flex items-center space-x-3">
+                        <Image
+                          src={affirmation.userData?.photoURL || '/default-avatar.svg'}
+                          alt="Profile"
+                          width={40}
+                          height={40}
+                          className="rounded-full"
+                        />
+                        <span className="font-medium">
+                          {affirmation.userData?.firstName} {affirmation.userData?.lastName}
                         </span>
                       </div>
-                      <p className="text-gray-700">{response.content}</p>
+                      <button
+                        onClick={() => deleteAffirmation(affirmation.id)}
+                        className="text-red-500 hover:text-red-700 transition-colors"
+                        title="Delete affirmation"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                        </svg>
+                      </button>
                     </div>
-                  ))}
-                </div>
-
-                <div className="border-t border-gray-200 pt-4">
-                  <textarea
-                    value={newResponse}
-                    onChange={(e) => setNewResponse(e.target.value)}
-                    placeholder="Share your thoughts..."
-                    className="w-full h-24 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#6c5ce7] focus:border-transparent"
-                  />
-                  <button
-                    onClick={handleSubmitResponse}
-                    className="mt-2 px-4 py-2 bg-[#6c5ce7] text-white rounded-md hover:bg-[#5a4dc7] transition-colors"
-                  >
-                    Submit Response
-                  </button>
-                </div>
+                    <p className="text-gray-700">{affirmation.content}</p>
+                    <p className="text-sm text-gray-500 mt-2">
+                      {affirmation.createdAt?.toDate().toLocaleDateString()}
+                    </p>
+                  </div>
+                ))}
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </main>
 
@@ -364,6 +277,4 @@ const AffirmationsPage = () => {
       </div>
     </div>
   );
-};
-
-export default AffirmationsPage;
+}

@@ -486,7 +486,10 @@ export default function Profile() {
                       )}
                       {post.type === 'story' && (
                         <div className="space-y-2">
-                          <p className="text-gray-700">{post.content}</p>
+                          <div 
+                            className="text-gray-700"
+                            dangerouslySetInnerHTML={{ __html: post.formattedContent || post.content }}
+                          />
                           {post.tags && (
                             <div className="flex flex-wrap gap-2">
                               {post.tags.map((tag: string) => (
