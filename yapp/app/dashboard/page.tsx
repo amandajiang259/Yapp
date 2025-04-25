@@ -6,11 +6,16 @@ import { useRouter } from "next/navigation";
 import { User } from 'firebase/auth';
 import Link from 'next/link';
 import { doc, getDoc } from 'firebase/firestore';
+import Head from 'next/head';
 
 export default function Dashboard() {
   const [user, setUser] = useState<User | null>(null);
   const [firstName, setFirstName] = useState<string>('');
   const router = useRouter();
+
+  useEffect(() => {
+    document.title = "Dashboard | Yapp";
+  }, []);
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (user: User | null) => {
