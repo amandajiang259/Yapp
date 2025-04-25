@@ -3,6 +3,10 @@
     "firebase": "^11.4.0",
     "firebase-admin": "^13.2.0",
     "mongodb": "^6.15.0",
-    "next-auth": "^4.24.11"
+    "next-auth": "^4.24.11",
+    "uuid": "^11.1.0"
+  },
+  "devDependencies": {
+    "@types/uuid": "^10.0.0"
   }
 }

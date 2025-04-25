@@ -75,17 +75,17 @@ export default function SearchPage() {
     try {
       if (searchType === 'users') {
         const usersRef = collection(db, 'users');
-        const q = query(
-          usersRef,
-          where('username', '>=', searchTerm.toLowerCase()),
-          where('username', '<=', searchTerm.toLowerCase() + '\uf8ff')
+        const querySnapshot = await getDocs(usersRef);
+        const users = querySnapshot.docs
+          .map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          })) as AppUser[];
+        
+        const filteredUsers = users.filter(user => 
+          user.username && user.username.toLowerCase().startsWith(searchTerm.toLowerCase())
         );
-        const querySnapshot = await getDocs(q);
-        const users = querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as AppUser[];
-        setSearchResults(users);
+        setSearchResults(filteredUsers);
       } else {
         const postsRef = collection(db, 'posts');
         const q = query(
@@ -173,6 +173,9 @@ export default function SearchPage() {
                 </Link>
                 <Link href="/dashboard/messages" className="text-white hover:bg-[#ab9dd3] px-3 py-2 rounded-md text-sm font-medium transition-colors">
                   Messages
+                </Link>
+                <Link href="/dashboard/affirmations" className="text-white hover:bg-[#ab9dd3] px-3 py-2 rounded-md text-sm font-medium transition-colors">
+                  Affirmations
                 </Link>
                 <Link href="/dashboard/profile" className="text-white hover:bg-[#ab9dd3] px-3 py-2 rounded-md text-sm font-medium transition-colors">
                   Profile
