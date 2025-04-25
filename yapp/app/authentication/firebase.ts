@@ -1,3 +1,4 @@
+let NEXT_PUBLIC_FIREBASE_API_KEY = 'AIzaSyA9Wcu9JEEqapUuC9MpBrQ8cwDhgl2NTvA';
 import { initializeApp } from 'firebase/app';
 import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 import { 

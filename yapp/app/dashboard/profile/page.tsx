@@ -1,5 +1,6 @@
-"use client";
+import Profile from "./ProfilePage";
 
+<<<<<<< HEAD
 import { useEffect, useState, useRef } from "react";
 import { auth, db } from "../../authentication/firebase";
 import { doc, getDoc, updateDoc, collection, query, where, getDocs, deleteDoc } from 'firebase/firestore';
@@ -583,4 +584,13 @@ export default function Profile() {
       )}
     </div>
   );
+=======
+export const metadata = {
+  title: "🪪 Profile Page",
+  description: "Write and share a new post on Yapp.",
+};
+
+export default function ProfilePage() {
+  return <Profile />;
+>>>>>>> 3f471aa25ec11ecf549acd73d5672c514ac6c1b1
 }

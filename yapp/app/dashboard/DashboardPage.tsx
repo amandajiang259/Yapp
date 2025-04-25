@@ -1,11 +1,13 @@
-import Dashboard from "./DashboardPage";
+"use client";
 
-export const metadata = {
-  title: " Main Page",
-  description: "Yapp Main Page!",
-};
+import { useEffect, useState } from "react";
+import { auth, signOut, db } from "../authentication/firebase";
+import { useRouter } from "next/navigation";
+import { User } from 'firebase/auth';
+import Link from 'next/link';
+import Head from 'next/head';
+import { doc, getDoc } from 'firebase/firestore';
 
-<<<<<<< HEAD
 export default function Dashboard() {
   const [user, setUser] = useState<User | null>(null);
   const [firstName, setFirstName] = useState<string>('');
@@ -41,6 +43,10 @@ export default function Dashboard() {
   }
 
   return (
+  <>
+    <Head>
+        <title>Dashboard</title>
+    </Head>
     <div className="min-h-screen bg-[#f6ebff]">
       {/* Navigation */}
       <nav className="bg-[#6c5ce7] shadow-lg">
@@ -92,7 +98,7 @@ export default function Dashboard() {
               <div className="bg-[#f6ebff] rounded-lg p-4 border border-[#ab9dd3]">
                 <h3 className="text-[#6c5ce7] font-semibold mb-2">Create New Story</h3>
                 <p className="text-gray-600 mb-4">Share your thoughts and experiences...</p>
-                <Link href="/dashboard/create-post" className="block">
+                <Link href="/dashboard/post-creation">
                   <button className="bg-[#68baa5] text-white px-4 py-2 rounded-md hover:bg-[#5aa594] transition-colors w-full">
                     Start Writing
                   </button>
@@ -108,11 +114,9 @@ export default function Dashboard() {
               <div className="bg-[#f6ebff] rounded-lg p-4 border border-[#ab9dd3]">
                 <h3 className="text-[#6c5ce7] font-semibold mb-2">Connect</h3>
                 <p className="text-gray-600 mb-4">Find and connect with other users...</p>
-                <Link href="/dashboard/search" className="block">
-                  <button className="bg-[#68baa5] text-white px-4 py-2 rounded-md hover:bg-[#5aa594] transition-colors w-full">
-                    Explore
-                  </button>
-                </Link>
+                <button className="bg-[#68baa5] text-white px-4 py-2 rounded-md hover:bg-[#5aa594] transition-colors w-full">
+                  Explore
+                </button>
               </div>
             </div>
           </div>
@@ -124,10 +128,6 @@ export default function Dashboard() {
         <p>Welcome to Yapp! Share your positive affirmations and creative stories!</p>
       </div>
     </div>
+  </>
   );
 } 
-=======
-export default function DashboardPage() {
-  return <Dashboard />;
-}
->>>>>>> 3f471aa25ec11ecf549acd73d5672c514ac6c1b1
