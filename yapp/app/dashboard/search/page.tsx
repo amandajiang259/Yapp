@@ -15,14 +15,31 @@ const interests = [
   'Politics', 'Business', 'Education', 'Health', 'Environment'
 ];
 
+interface Post {
+  id: string;
+  userId: string;
+  content: string;
+  tags: string[];
+  createdAt: any;
+  type: string;
+}
+
+interface UserProfile {
+  username: string;
+  photoURL: string;
+  bio?: string;
+}
+
 export default function SearchPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [searchType, setSearchType] = useState<'users' | 'posts'>('users');
-  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searchResults, setSearchResults] = useState<Post[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [firstName, setFirstName] = useState<string>('');
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [userProfiles, setUserProfiles] = useState<Record<string, UserProfile>>({});
   const router = useRouter();
 
   useEffect(() => {
@@ -77,14 +94,36 @@ export default function SearchPage() {
         const postsRef = collection(db, 'posts');
         const q = query(
           postsRef,
-          where('tags', 'array-contains', searchTerm.toLowerCase()),
+          where('tags', 'array-contains', searchTerm),
           orderBy('createdAt', 'desc')
         );
         const querySnapshot = await getDocs(q);
         const results = querySnapshot.docs.map(doc => ({
           id: doc.id,
-          ...doc.data()
-        }));
+          userId: doc.data().userId,
+          content: doc.data().content,
+          tags: doc.data().tags,
+          createdAt: doc.data().createdAt,
+          type: doc.data().type
+        })) as Post[];
+        
+        // Fetch user profiles for all posts
+        const userIds = results.map(post => post.userId);
+        const uniqueUserIds = [...new Set(userIds)];
+        const userProfilesData: Record<string, UserProfile> = {};
+        
+        for (const userId of uniqueUserIds) {
+          const userDoc = await getDoc(doc(db, 'users', userId));
+          if (userDoc.exists()) {
+            userProfilesData[userId] = {
+              username: userDoc.data().username,
+              photoURL: userDoc.data().photoURL,
+              bio: userDoc.data().bio
+            };
+          }
+        }
+        
+        setUserProfiles(userProfilesData);
         setSearchResults(results);
       }
     } catch (error: any) {
@@ -107,6 +146,12 @@ export default function SearchPage() {
 
     return () => clearTimeout(delayDebounceFn);
   }, [searchTerm, searchType]);
+
+  const handleTagClick = (tag: string) => {
+    setSelectedTag(tag);
+    setSearchType('posts');
+    setSearchTerm(tag);
+  };
 
   if (!user) {
     return null;
@@ -162,7 +207,11 @@ export default function SearchPage() {
             <div className="flex flex-col space-y-4">
               <div className="flex space-x-4">
                 <button
-                  onClick={() => setSearchType('users')}
+                  onClick={() => {
+                    setSearchType('users');
+                    setSelectedTag(null);
+                    setSearchTerm('');
+                  }}
                   className={`px-4 py-2 rounded-lg ${
                     searchType === 'users'
                       ? 'bg-[#6c5ce7] text-white'
@@ -172,7 +221,11 @@ export default function SearchPage() {
                   Users
                 </button>
                 <button
-                  onClick={() => setSearchType('posts')}
+                  onClick={() => {
+                    setSearchType('posts');
+                    setSelectedTag(null);
+                    setSearchTerm('');
+                  }}
                   className={`px-4 py-2 rounded-lg ${
                     searchType === 'posts'
                       ? 'bg-[#6c5ce7] text-white'
@@ -183,25 +236,29 @@ export default function SearchPage() {
                 </button>
               </div>
 
-              <div className="flex space-x-2">
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder={searchType === 'users' ? 'Search by username...' : 'Search by tag...'}
-                  className="flex-1 px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-[#6c5ce7] focus:border-transparent"
-                />
-              </div>
+              {searchType === 'users' && (
+                <div className="flex space-x-2">
+                  <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="Search by username..."
+                    className="flex-1 px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-[#6c5ce7] focus:border-transparent"
+                  />
+                </div>
+              )}
 
               {searchType === 'posts' && (
                 <div className="flex flex-wrap gap-2">
                   {interests.map((tag) => (
                     <button
                       key={tag}
-                      onClick={() => {
-                        setSearchTerm(tag);
-                      }}
-                      className="px-3 py-1 bg-[#f6ebff] text-[#6c5ce7] rounded-full hover:bg-[#e6d6ff] transition-colors"
+                      onClick={() => handleTagClick(tag)}
+                      className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
+                        selectedTag === tag
+                          ? 'bg-[#6c5ce7] text-white'
+                          : 'bg-[#f6ebff] text-[#6c5ce7] border border-[#ab9dd3] hover:bg-[#e6d9ff]'
+                      }`}
                     >
                       #{tag}
                     </button>
@@ -251,48 +308,45 @@ export default function SearchPage() {
                 </div>
               ) : (
                 // Post search results
-                <div className="grid grid-cols-1 gap-4">
-                  {searchResults.map((post) => (
-                    <div
-                      key={post.id}
-                      className="bg-white rounded-lg shadow-md p-4"
-                    >
-                      <div className="flex items-center space-x-4 mb-4">
-                        <div className="relative w-10 h-10">
-                          <Image
-                            src={post.userPhotoURL || '/default-avatar.svg'}
-                            alt={post.username}
-                            fill
-                            className="rounded-full object-cover"
-                          />
+                <div className="space-y-4">
+                  {searchResults.map((post) => {
+                    const userProfile = userProfiles[post.userId];
+                    return (
+                      <div key={post.id} className="bg-white rounded-lg shadow-md p-4">
+                        <div className="flex items-center space-x-3 mb-3">
+                          <div className="relative w-10 h-10">
+                            <Image
+                              src={userProfile?.photoURL || '/default-avatar.svg'}
+                              alt={userProfile?.username || 'User avatar'}
+                              fill
+                              className="rounded-full object-cover"
+                            />
+                          </div>
+                          <div>
+                            <p className="font-semibold text-[#6c5ce7]">
+                              {userProfile?.username || 'Unknown User'}
+                            </p>
+                            <p className="text-sm text-gray-500">
+                              {post.createdAt?.toDate().toLocaleDateString()}
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <Link
-                            href={`/dashboard/profile/${post.userId}`}
-                            className="font-semibold text-[#6c5ce7] hover:underline"
-                          >
-                            {post.username}
-                          </Link>
-                          <p className="text-gray-500 text-sm">
-                            {new Date(post.createdAt?.toDate()).toLocaleDateString()}
-                          </p>
-                        </div>
+                        <p className="text-gray-800">{post.content}</p>
+                        {post.tags && post.tags.length > 0 && (
+                          <div className="flex flex-wrap gap-2 mt-3">
+                            {post.tags.map((tag: string) => (
+                              <span
+                                key={tag}
+                                className="px-2 py-1 bg-[#f6ebff] text-[#6c5ce7] rounded-full text-sm"
+                              >
+                                #{tag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                      <p className="text-gray-800 mb-2">{post.content}</p>
-                      {post.tags && post.tags.length > 0 && (
-                        <div className="flex flex-wrap gap-2">
-                          {post.tags.map((tag: string) => (
-                            <span
-                              key={tag}
-                              className="px-2 py-1 bg-[#f6ebff] text-[#6c5ce7] rounded-full text-sm"
-                            >
-                              #{tag}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )
             ) : searchTerm && !isLoading ? (
