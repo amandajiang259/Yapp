@@ -6,12 +6,18 @@ import { useRouter } from "next/navigation";
 import { User } from 'firebase/auth';
 import Link from 'next/link';
 import { doc, getDoc } from 'firebase/firestore';
-import Head from 'next/head';
 
 export default function Dashboard() {
   const [user, setUser] = useState<User | null>(null);
   const [firstName, setFirstName] = useState<string>('');
   const router = useRouter();
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [userProfile, setUserProfile] = useState<any>(null);
+  const [posts, setPosts] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [showAffirmation, setShowAffirmation] = useState(true);
+  const [dailyAffirmation, setDailyAffirmation] = useState('');
+  const [weeklyPrompt, setWeeklyPrompt] = useState<string>('');
 
   useEffect(() => {
     document.title = "Dashboard | Yapp";
@@ -30,6 +36,11 @@ export default function Dashboard() {
         }
       }
     });
+
+    // Set daily affirmation and weekly prompt
+    const randomIndex = Math.floor(Math.random() * AFFIRMATIONS.length);
+    setDailyAffirmation(AFFIRMATIONS[randomIndex]);
+    setWeeklyPrompt(generateWeeklyPrompt());
 
     return () => unsubscribe();
   }, [router]);
@@ -69,6 +80,9 @@ export default function Dashboard() {
                 <Link href="/dashboard/messages" className="text-white hover:bg-[#ab9dd3] px-3 py-2 rounded-md text-sm font-medium transition-colors">
                   Messages
                 </Link>
+                <Link href="/dashboard/affirmations" className="text-white hover:bg-[#ab9dd3] px-3 py-2 rounded-md text-sm font-medium transition-colors">
+                  Affirmations
+                </Link>
                 <Link href="/dashboard/profile" className="text-white hover:bg-[#ab9dd3] px-3 py-2 rounded-md text-sm font-medium transition-colors">
                   Profile
                 </Link>
@@ -90,9 +104,43 @@ export default function Dashboard() {
       {/* Main content */}
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
+          {/* Daily Affirmation Banner - Moved here and restyled */}
+          {showAffirmation && (
+            <div className="bg-gradient-to-r from-[#6c5ce7] to-[#ab9dd3] text-white p-6 rounded-lg shadow-lg mb-8 relative animate-slideDown">
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold mb-2">Today's Affirmation</h3>
+                  <p className="text-xl italic">{dailyAffirmation}</p>
+                </div>
+                <button
+                  onClick={() => setShowAffirmation(false)}
+                  className="text-white hover:text-gray-200 transition-colors text-2xl font-light"
+                >
+                  &times;
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="bg-white rounded-lg shadow-lg p-6">
             <h2 className="text-2xl font-bold text-[#6c5ce7] mb-4">Dashboard</h2>
             <p className="text-gray-600">Share your positive affirmations and creative stories here.</p>
+            
+            {/* Weekly Prompt */}
+            <div className="mt-6 mb-8 p-4 bg-[#f6ebff] rounded-lg border border-[#ab9dd3]">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h3 className="text-[#6c5ce7] font-semibold mb-2">This Week's Prompt</h3>
+                  <p className="text-gray-800 italic">{weeklyPrompt}</p>
+                </div>
+                <Link href="/dashboard/affirmations">
+                  <button className="bg-[#68baa5] text-white px-4 py-2 rounded-md hover:bg-[#5aa594] transition-colors">
+                    Respond to Prompt
+                  </button>
+                </Link>
+              </div>
+            </div>
+
             <div className="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {/* Example content cards */}
               <div className="bg-[#f6ebff] rounded-lg p-4 border border-[#ab9dd3]">
@@ -107,9 +155,11 @@ export default function Dashboard() {
               <div className="bg-[#f6ebff] rounded-lg p-4 border border-[#ab9dd3]">
                 <h3 className="text-[#6c5ce7] font-semibold mb-2">Daily Affirmation</h3>
                 <p className="text-gray-600 mb-4">Set your daily positive affirmation...</p>
-                <button className="bg-[#68baa5] text-white px-4 py-2 rounded-md hover:bg-[#5aa594] transition-colors w-full">
-                  Add Affirmation
-                </button>
+                <Link href="/dashboard/affirmations" className="block">
+                  <button className="bg-[#68baa5] text-white px-4 py-2 rounded-md hover:bg-[#5aa594] transition-colors w-full">
+                    Add Affirmation
+                  </button>
+                </Link>
               </div>
               <div className="bg-[#f6ebff] rounded-lg p-4 border border-[#ab9dd3]">
                 <h3 className="text-[#6c5ce7] font-semibold mb-2">Connect</h3>

@@ -4,8 +4,8 @@ import {
   $isRangeSelection,
   FORMAT_TEXT_COMMAND,
   TextFormatType,
-  INSERT_TAB_COMMAND,
 } from 'lexical';
+import { INSERT_ORDERED_LIST_COMMAND, INSERT_UNORDERED_LIST_COMMAND } from '@lexical/list';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import { EmojiPicker } from './EmojiPicker';
 
@@ -74,57 +74,24 @@ const ToolbarPlugin = () => {
 
       <div className="flex gap-2">
         <button
-          onClick={() => editor.dispatchCommand(INSERT_TAB_COMMAND, undefined)}
-          className="px-2 py-1 rounded hover:bg-gray-100"
-          title="Heading 1"
-        >
-          H1
-        </button>
-        <button
-          onClick={() => editor.dispatchCommand(INSERT_TAB_COMMAND, undefined)}
-          className="px-2 py-1 rounded hover:bg-gray-100"
-          title="Heading 2"
-        >
-          H2
-        </button>
-        <button
-          onClick={() => editor.dispatchCommand(INSERT_TAB_COMMAND, undefined)}
-          className="px-2 py-1 rounded hover:bg-gray-100"
-          title="Quote"
-        >
-          Quote
-        </button>
-      </div>
-
-      <div className="border-l border-gray-300 mx-2"></div>
-
-      <div className="flex gap-2">
-        <button
-          onClick={() => editor.dispatchCommand(INSERT_TAB_COMMAND, undefined)}
+          onClick={() => editor.dispatchCommand(INSERT_ORDERED_LIST_COMMAND, undefined)}
           className="px-2 py-1 rounded hover:bg-gray-100"
           title="Ordered List"
         >
           1.
         </button>
         <button
-          onClick={() => editor.dispatchCommand(INSERT_TAB_COMMAND, undefined)}
+          onClick={() => editor.dispatchCommand(INSERT_UNORDERED_LIST_COMMAND, undefined)}
           className="px-2 py-1 rounded hover:bg-gray-100"
           title="Bullet List"
         >
           •
         </button>
-        <button
-          onClick={() => formatText('code')}
-          className="px-2 py-1 rounded hover:bg-gray-100"
-          title="Code"
-        >
-          {'</>'}
-        </button>
       </div>
 
       <div className="border-l border-gray-300 mx-2"></div>
 
-      <div className="relative">
+      <div>
         <button
           onClick={() => setShowEmojiPicker(!showEmojiPicker)}
           className="px-2 py-1 rounded hover:bg-gray-100"
