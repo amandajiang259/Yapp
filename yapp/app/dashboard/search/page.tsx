@@ -49,6 +49,10 @@ export default function SearchPage() {
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
 
   useEffect(() => {
+    document.title = "Search | Yapp";
+  }, []);
+
+  useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((user) => {
       if (!user) {
         router.push('/');
