@@ -72,6 +72,10 @@ export default function Messages() {
   }, [router]);
 
   useEffect(() => {
+    document.title = "Messaging | Yapp";
+  }, []);
+
+  useEffect(() => {
     if (!currentUser) return;
 
     // Fetch conversations

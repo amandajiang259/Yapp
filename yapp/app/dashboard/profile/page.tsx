@@ -238,6 +238,10 @@ export default function Profile() {
     }
   }, [user]);
 
+  useEffect(() => {
+    document.title = "Profile | Yapp";
+  }, []);
+
   const handleDeletePost = async (postId: string) => {
     if (!user) return;
     

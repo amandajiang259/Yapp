@@ -6,18 +6,6 @@ import { useRouter } from "next/navigation";
 import { User } from 'firebase/auth';
 import Link from 'next/link';
 import { doc, getDoc } from 'firebase/firestore';
-import { collection, query, where, orderBy, onSnapshot, limit } from 'firebase/firestore';
-import Image from 'next/image';
-import { WEEKLY_PROMPTS, AFFIRMATIONS } from '../constants/prompts';
-
-function generateWeeklyPrompt(): string {
-  const now = new Date();
-  const oneJan = new Date(now.getFullYear(), 0, 1);
-  const days = Math.floor((now.getTime() - oneJan.getTime()) / (1000 * 60 * 60 * 24));
-  const week = Math.ceil((days + oneJan.getDay() + 1) / 7);
-  const index = week % WEEKLY_PROMPTS.length;
-  return WEEKLY_PROMPTS[index];
-}
 
 export default function Dashboard() {
   const [user, setUser] = useState<User | null>(null);
@@ -30,6 +18,10 @@ export default function Dashboard() {
   const [showAffirmation, setShowAffirmation] = useState(true);
   const [dailyAffirmation, setDailyAffirmation] = useState('');
   const [weeklyPrompt, setWeeklyPrompt] = useState<string>('');
+
+  useEffect(() => {
+    document.title = "Dashboard | Yapp";
+  }, []);
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (user: User | null) => {

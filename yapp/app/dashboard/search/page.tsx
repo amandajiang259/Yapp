@@ -66,7 +66,6 @@ export default function SearchPage() {
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
 
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged(async (user) => {
       if (!user) {
         router.push('/');
       } else {
