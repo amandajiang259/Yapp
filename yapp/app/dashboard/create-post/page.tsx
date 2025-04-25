@@ -23,12 +23,8 @@ import { TRANSFORMERS } from '@lexical/markdown';
 import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin';
 import { $getRoot, $getSelection } from 'lexical';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
-import { $generateNodesFromDOM } from '@lexical/html';
-import { $convertFromMarkdownString } from '@lexical/markdown';
 import ToolbarPlugin from './ToolbarPlugin';
 import './editor.css';
-import ImageUploader from "@/components/retreiveImage";
-import { $generateHtmlFromNodes } from '@lexical/html';
 
 const INTERESTS = [
   "Art", "Music", "Sports", "Technology", "Food", "Travel",
@@ -107,10 +103,7 @@ function EditorContent({ user }: { user: User | null }) {
       if (user) {
         const userDoc = await getDoc(doc(db, 'users', user.uid));
         if (userDoc.exists()) {
-          setCurrentUserData({
-            id: userDoc.id,
-            ...userDoc.data()
-          });
+          setCurrentUserData(userDoc.data());
         }
       }
     };
@@ -126,16 +119,23 @@ function EditorContent({ user }: { user: User | null }) {
 
     try {
       const editorState = editor.getEditorState();
-      
-      // Get the content
       const content = editorState.read(() => {
         return $getRoot().getTextContent();
       });
 
-      // Ensure all required fields are present
+      if (!content.trim()) {
+        setError('Please write your story before posting');
+        return;
+      }
+
+      if (selectedTags.length === 0) {
+        setError('Please select at least one tag');
+        return;
+      }
+
       const postData = {
         content: content,
-        tags: selectedTags || [],
+        tags: selectedTags,
         userId: currentUserData.id || auth.currentUser?.uid,
         username: currentUserData.username || 'Anonymous',
         firstName: currentUserData.firstName || 'User',
@@ -222,7 +222,7 @@ function EditorContent({ user }: { user: User | null }) {
         <main className="flex-1 overflow-y-auto">
           <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             <div className="bg-white rounded-lg shadow-lg p-8">
-              <h1 className="text-2xl font-bold text-[#6c5ce7] mb-6 text-center">Create Story</h1>
+              <h1 className="text-2xl font-bold text-[#6c5ce7] mb-6 text-center">Create Story Post</h1>
               
               {error && (
                 <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg">
@@ -243,7 +243,7 @@ function EditorContent({ user }: { user: User | null }) {
                       <div className="relative">
                         <RichTextPlugin
                           contentEditable={<ContentEditable className="editor-input min-h-[200px] pt-16 px-4" />}
-                          placeholder={<div className="absolute top-[15px] left-[11px] text-gray-400 pointer-events-none">Start writing your story...</div>}
+                          placeholder={<div className="absolute top-[15px] left-[11px] text-gray-400 pointer-events-none">Start writing your story here...</div>}
                           ErrorBoundary={() => <div>Something went wrong.</div>}
                         />
                         <AutoFocusPlugin />
@@ -251,6 +251,7 @@ function EditorContent({ user }: { user: User | null }) {
                         <LinkPlugin />
                         <ListPlugin />
                         <MarkdownShortcutPlugin transformers={TRANSFORMERS} />
+                        <OnChangePlugin onChange={handleEditorChange} />
                       </div>
                     </div>
                   </div>
@@ -262,8 +263,8 @@ function EditorContent({ user }: { user: User | null }) {
                   <ImageUploader userId={user?.uid} tags={selectedTags} />
               </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Tags (Select up to 3)
+                  <label className="block text-sm font-medium text-[#6c5ce7] mb-2">
+                    Select Tags (1-3)
                   </label>
                   <div className="flex flex-wrap gap-2">
                     {INTERESTS.map((tag) => (
@@ -288,8 +289,12 @@ function EditorContent({ user }: { user: User | null }) {
                 <div className="flex justify-end">
                   <button
                     type="submit"
-                    disabled={isLoading}
-                    className="bg-[#6c5ce7] text-white px-6 py-2 rounded-lg hover:bg-[#5a4bc7] transition-colors font-medium disabled:opacity-50"
+                    disabled={isLoading || !content.trim() || selectedTags.length === 0}
+                    className={`px-6 py-2 rounded-lg transition-colors font-medium ${
+                      isLoading || !content.trim() || selectedTags.length === 0
+                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        : 'bg-[#6c5ce7] text-white hover:bg-[#5a4bc7]'
+                    }`}
                   >
                     {isLoading ? 'Posting...' : 'Post Story'}
                   </button>
