@@ -101,7 +101,6 @@ export default function SearchPage() {
   };
 
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged(async (user) => {
       if (!user) {
         router.push('/');
       } else {

@@ -8,6 +8,7 @@ import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import Image from 'next/image';
 import Link from 'next/link';
+import Head from 'next/head';
 
 export default function EditProfile() {
   const [user, setUser] = useState<User | null>(null);
@@ -27,6 +28,10 @@ export default function EditProfile() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
+
+  useEffect(() => {
+    document.title = "Edit Profile | Yapp";
+  }, []);
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (user: User | null) => {
