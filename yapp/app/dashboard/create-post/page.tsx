@@ -29,7 +29,6 @@ import ToolbarPlugin from './ToolbarPlugin';
 import './editor.css';
 import ImageUploader from "@/components/retreiveImage";
 import { $generateHtmlFromNodes } from '@lexical/html';
-import ImageUploader from "@/components/retreiveImage";
 
 const INTERESTS = [
   "Art", "Music", "Sports", "Technology", "Food", "Travel",
@@ -256,12 +255,6 @@ function EditorContent() {
                     </div>
                   </div>
                 </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Upload Image
-                </label>
-                  <ImageUploader userId={user?.uid} tags={selectedTags} />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
