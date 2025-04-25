@@ -5,6 +5,8 @@ import { useParams } from 'next/navigation';
 import { auth, db } from '../../../authentication/firebase';
 import { doc, getDoc, collection, query, where, getDocs, orderBy } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
+import { useIsFollowing } from '@/hooks/useIsFollowing';
+import { followUser, unfollowUser } from '@/lib/followActions';
 import Image from 'next/image';
 import Link from 'next/link';
 import { LexicalComposer } from '@lexical/react/LexicalComposer';
@@ -41,10 +43,20 @@ export default function UserProfile() {
   const router = useRouter();
   const [user, setUser] = useState<UserData | null>(null);
   const [currentUserData, setCurrentUserData] = useState<UserData | null>(null);
+  const initialFollowing = useIsFollowing(userId);
+  const [isFollowingState, setIsFollowingState] = useState<boolean | null>(null);
+
+// Keep synced when hook loads
+  useEffect(() => {
+    if (initialFollowing !== null) {
+      setIsFollowingState(initialFollowing);
+    }
+  }, [initialFollowing]);
   const [posts, setPosts] = useState<Post[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [isHovering, setIsHovering] = useState(false);
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (user) => {
@@ -196,14 +208,47 @@ export default function UserProfile() {
           <div className="flex items-center space-x-6 mb-6">
             <div className="relative w-24 h-24">
               <Image
-                src={user.photoURL || '/default-avatar.svg'}
-                alt={`${user.firstName} ${user.lastName}'s profile picture`}
-                fill
-                className="rounded-full object-cover"
+                  src={user.photoURL || '/default-avatar.svg'}
+                  alt={`${user.firstName} ${user.lastName}'s profile picture`}
+                  fill
+                  className="rounded-full object-cover"
               />
             </div>
-            <div>
-              <h1 className="text-2xl font-bold text-[#6c5ce7]">{user.username}</h1>
+
+            <div className="flex-1">
+              <div className="flex items-center space-x-4">
+                <h1 className="text-2xl font-bold text-[#6c5ce7]">{user.username}</h1>
+
+                {currentUser?.uid !== userId && (
+                    isFollowingState === null ? (
+                        <p className="text-sm text-gray-500">Checking...</p>
+                    ) : (
+                        <button
+                            onMouseEnter={() => setIsHovering(true)}
+                            onMouseLeave={() => setIsHovering(false)}
+                            onClick={async () => {
+                              if (isFollowingState) {
+                                await unfollowUser(userId);
+                                setIsFollowingState(false);
+                              } else {
+                                await followUser(userId);
+                                await followUser(userId);
+                                setIsFollowingState(true);
+                              }
+                              // window.location.reload();
+                            }}
+                            className={`px-3 py-1 text-sm rounded text-white font-medium transition-colors ${
+                                isFollowingState
+                                    ? 'bg-[#68baa5] hover:bg-red-500'
+                                    : 'bg-[#68baa5] hover:bg-[#5aa594]'
+                            }`}
+                        >
+                          {isFollowingState ? (isHovering ? 'Unfollow' : 'Following') : 'Follow'}
+                        </button>
+                    )
+                )}
+              </div>
+
               <p className="text-gray-600">{user.firstName} {user.lastName}</p>
               <p className="text-gray-600 mt-2">{user.bio || 'No bio available'}</p>
             </div>
@@ -211,19 +256,19 @@ export default function UserProfile() {
 
           {/* Interests */}
           {user.interests && user.interests.length > 0 && (
-            <div className="mb-6">
-              <h2 className="text-lg font-semibold text-[#6c5ce7] mb-2">Interests</h2>
-              <div className="flex flex-wrap gap-2">
-                {user.interests.map((interest) => (
-                  <span
-                    key={interest}
-                    className="px-3 py-1 bg-[#f6ebff] text-[#6c5ce7] rounded-full text-sm"
-                  >
-                    {interest}
-                  </span>
-                ))}
+              <div className="mb-6">
+                <h2 className="text-lg font-semibold text-[#6c5ce7] mb-2">Interests</h2>
+                <div className="flex flex-wrap gap-2">
+                  {user.interests.map((interest) => (
+                      <span
+                          key={interest}
+                          className="px-3 py-1 bg-[#f6ebff] text-[#6c5ce7] rounded-full text-sm"
+                      >
+            {interest}
+          </span>
+                  ))}
+                </div>
               </div>
-            </div>
           )}
         </div>
 
