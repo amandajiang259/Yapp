@@ -57,13 +57,48 @@ export default function SearchPage() {
   const router = useRouter();
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [currentUserData, setCurrentUserData] = useState<UserData | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [searchType, setSearchType] = useState<'users' | 'posts'>('users');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [searchType, setSearchType] = useState<'users' | 'posts'>('posts');
   const [searchResults, setSearchResults] = useState<(Post | AppUser)[]>([]);
   const [userProfiles, setUserProfiles] = useState<Record<string, UserProfile>>({});
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
+
+  const tags = [
+    'Art',
+    'Music',
+    'Sports',
+    'Technology',
+    'Food',
+    'Travel',
+    'Fashion',
+    'Health',
+    'Education',
+    'Business',
+    'Science',
+    'Entertainment',
+    'Politics',
+    'Environment',
+    'Literature'
+  ];
+
+  const toggleTag = (tag: string) => {
+    setSelectedTags(prev => {
+      if (prev.includes(tag)) {
+        // If tag is already selected, remove it
+        return prev.filter(t => t !== tag);
+      } else if (prev.length < 3) {
+        // If less than 3 tags are selected, add the new tag
+        return [...prev, tag];
+      }
+      // If already 3 tags are selected, don't add the new tag
+      return prev;
+    });
+  };
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (user) => {
@@ -94,7 +129,7 @@ export default function SearchPage() {
   };
 
   const handleSearch = async () => {
-    if (!searchTerm.trim()) return;
+    if (!searchQuery.trim() && selectedTags.length === 0) return;
     setIsLoading(true);
 
     try {
@@ -108,7 +143,7 @@ export default function SearchPage() {
           })) as AppUser[];
         
         const filteredUsers = users.filter(user => 
-          user.username && user.username.toLowerCase().startsWith(searchTerm.toLowerCase())
+          user.username && user.username.toLowerCase().includes(searchQuery.toLowerCase())
         );
         setSearchResults(filteredUsers);
       } else {
@@ -120,12 +155,22 @@ export default function SearchPage() {
             ...doc.data()
           })) as Post[];
         
-        // Filter posts by tag
-        const filteredPosts = posts.filter(post => 
-          post.tags && post.tags.some(tag => 
-            tag.toLowerCase() === searchTerm.toLowerCase()
-          )
-        );
+        // Filter posts by search query and selected tags
+        const filteredPosts = posts.filter(post => {
+          // Check if post matches search query
+          const matchesSearch = searchQuery.trim() === '' || 
+            post.content.toLowerCase().includes(searchQuery.toLowerCase());
+          
+          // Check if post matches any selected tags
+          const matchesTags = selectedTags.length === 0 || 
+            (post.tags && post.tags.some(postTag => 
+              selectedTags.some(selectedTag => 
+                postTag.toLowerCase() === selectedTag.toLowerCase()
+              )
+            ));
+          
+          return matchesSearch && matchesTags;
+        });
         
         setSearchResults(filteredPosts);
 
@@ -153,15 +198,16 @@ export default function SearchPage() {
       }
     } catch (error) {
       console.error('Error searching:', error);
+      setError('An error occurred while searching');
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Trigger search when search term changes
+  // Trigger search when search query or selected tags change
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
-      if (searchTerm.trim()) {
+      if (searchQuery.trim() || selectedTags.length > 0) {
         handleSearch();
       } else {
         setSearchResults([]);
@@ -169,12 +215,12 @@ export default function SearchPage() {
     }, 300);
 
     return () => clearTimeout(delayDebounceFn);
-  }, [searchTerm, searchType]);
+  }, [searchQuery, selectedTags, searchType]);
 
   const handleTagClick = (tag: string) => {
     setSelectedTag(tag);
     setSearchType('posts');
-    setSearchTerm(tag);
+    setSearchQuery(tag);
   };
 
   if (!currentUser) {
@@ -182,7 +228,7 @@ export default function SearchPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f6ebff]">
+    <div className="min-h-screen bg-[#f5f5f5]">
       {/* Navigation */}
       <nav className="bg-[#6c5ce7] shadow-lg">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -237,7 +283,7 @@ export default function SearchPage() {
                   onClick={() => {
                     setSearchType('users');
                     setSelectedTag(null);
-                    setSearchTerm('');
+                    setSearchQuery('');
                   }}
                   className={`px-4 py-2 rounded-lg ${
                     searchType === 'users'
@@ -251,7 +297,7 @@ export default function SearchPage() {
                   onClick={() => {
                     setSearchType('posts');
                     setSelectedTag(null);
-                    setSearchTerm('');
+                    setSearchQuery('');
                   }}
                   className={`px-4 py-2 rounded-lg ${
                     searchType === 'posts'
@@ -267,8 +313,8 @@ export default function SearchPage() {
                 <div className="flex space-x-2">
                   <input
                     type="text"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Search by username..."
                     className="flex-1 px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-[#6c5ce7] focus:border-transparent"
                   />
@@ -276,20 +322,28 @@ export default function SearchPage() {
               )}
 
               {searchType === 'posts' && (
-                <div className="flex flex-wrap gap-2">
-                  {interests.map((tag) => (
-                    <button
-                      key={tag}
-                      onClick={() => handleTagClick(tag)}
-                      className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
-                        selectedTag === tag
-                          ? 'bg-[#6c5ce7] text-white'
-                          : 'bg-[#f6ebff] text-[#6c5ce7] border border-[#ab9dd3] hover:bg-[#e6d9ff]'
-                      }`}
-                    >
-                      #{tag}
-                    </button>
-                  ))}
+                <div className="space-y-2">
+                  <div className="flex flex-wrap gap-2">
+                    {tags.map((tag) => (
+                      <button
+                        key={tag}
+                        onClick={() => toggleTag(tag)}
+                        disabled={!selectedTags.includes(tag) && selectedTags.length >= 3}
+                        className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
+                          selectedTags.includes(tag)
+                            ? 'bg-[#68baa5] text-white'
+                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed'
+                        }`}
+                      >
+                        {tag}
+                      </button>
+                    ))}
+                  </div>
+                  {selectedTags.length >= 3 && (
+                    <p className="text-sm text-gray-500">
+                      Maximum of 3 tags selected. Deselect a tag to select a different one.
+                    </p>
+                  )}
                 </div>
               )}
             </div>
@@ -359,6 +413,18 @@ export default function SearchPage() {
                               className="text-gray-600 text-sm"
                               dangerouslySetInnerHTML={{ __html: post.content }}
                             />
+                            {post.tags && post.tags.length > 0 && (
+                              <div className="flex flex-wrap gap-2 mt-2">
+                                {post.tags.map(tag => (
+                                  <span
+                                    key={tag}
+                                    className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs"
+                                  >
+                                    {tag}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
