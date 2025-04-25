@@ -1,0 +1,367 @@
+"use client";
+
+import { useState, useEffect } from 'react';
+import { auth, db } from '../../authentication/firebase';
+import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import Image from 'next/image';
+import { User } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+
+const interests = [
+  'Technology', 'Sports', 'Music', 'Art', 'Travel', 'Food', 'Fashion',
+  'Gaming', 'Movies', 'Books', 'Fitness', 'Photography', 'Science',
+  'Politics', 'Business', 'Education', 'Health', 'Environment'
+];
+
+interface Post {
+  id: string;
+  userId: string;
+  content: string;
+  tags: string[];
+  createdAt: any;
+  type: string;
+}
+
+interface UserProfile {
+  username: string;
+  photoURL: string;
+  bio?: string;
+}
+
+export default function SearchPage() {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [searchType, setSearchType] = useState<'users' | 'posts'>('users');
+  const [searchResults, setSearchResults] = useState<Post[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [firstName, setFirstName] = useState<string>('');
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [userProfiles, setUserProfiles] = useState<Record<string, UserProfile>>({});
+  const router = useRouter();
+
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged(async (user: User | null) => {
+      if (!user) {
+        router.push('/');
+      } else {
+        setUser(user);
+        // Fetch user profile data
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        if (userDoc.exists()) {
+          setFirstName(userDoc.data().firstName);
+        }
+      }
+    });
+
+    return () => unsubscribe();
+  }, [router]);
+
+  const handleLogout = async () => {
+    try {
+      await auth.signOut();
+    } catch (error) {
+      console.error("Logout Error:", error);
+    }
+  };
+
+  const handleSearch = async () => {
+    if (!searchTerm.trim()) return;
+
+    setIsLoading(true);
+    setError(null);
+    setSearchResults([]);
+
+    try {
+      if (searchType === 'users') {
+        // Search for users by username (letter by letter)
+        const usersRef = collection(db, 'users');
+        const q = query(
+          usersRef,
+          where('username', '>=', searchTerm.toLowerCase()),
+          where('username', '<=', searchTerm.toLowerCase() + '\uf8ff')
+        );
+        const querySnapshot = await getDocs(q);
+        const results = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        setSearchResults(results);
+      } else {
+        // Search for posts by tags
+        const postsRef = collection(db, 'posts');
+        const q = query(
+          postsRef,
+          where('tags', 'array-contains', searchTerm),
+          orderBy('createdAt', 'desc')
+        );
+        const querySnapshot = await getDocs(q);
+        const results = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          userId: doc.data().userId,
+          content: doc.data().content,
+          tags: doc.data().tags,
+          createdAt: doc.data().createdAt,
+          type: doc.data().type
+        })) as Post[];
+        
+        // Fetch user profiles for all posts
+        const userIds = results.map(post => post.userId);
+        const uniqueUserIds = [...new Set(userIds)];
+        const userProfilesData: Record<string, UserProfile> = {};
+        
+        for (const userId of uniqueUserIds) {
+          const userDoc = await getDoc(doc(db, 'users', userId));
+          if (userDoc.exists()) {
+            userProfilesData[userId] = {
+              username: userDoc.data().username,
+              photoURL: userDoc.data().photoURL,
+              bio: userDoc.data().bio
+            };
+          }
+        }
+        
+        setUserProfiles(userProfilesData);
+        setSearchResults(results);
+      }
+    } catch (error: any) {
+      console.error('Search error:', error);
+      setError('Failed to perform search. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Trigger search when search term changes
+  useEffect(() => {
+    const delayDebounceFn = setTimeout(() => {
+      if (searchTerm.trim()) {
+        handleSearch();
+      } else {
+        setSearchResults([]);
+      }
+    }, 300);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchTerm, searchType]);
+
+  const handleTagClick = (tag: string) => {
+    setSelectedTag(tag);
+    setSearchType('posts');
+    setSearchTerm(tag);
+  };
+
+  if (!user) {
+    return null;
+  }
+
+  return (
+    <div className="min-h-screen bg-[#f6ebff]">
+      {/* Navigation */}
+      <nav className="bg-[#6c5ce7] shadow-lg">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between h-16">
+            <div className="flex items-center space-x-8">
+              <Link 
+                href="/dashboard" 
+                className="text-xl font-bold text-white hover:text-[#f6ebff] transition-colors cursor-pointer"
+              >
+                Yapp
+              </Link>
+              <div className="hidden md:flex space-x-4">
+                <Link href="/dashboard" className="text-white hover:bg-[#ab9dd3] px-3 py-2 rounded-md text-sm font-medium transition-colors">
+                  Home
+                </Link>
+                <Link href="/dashboard/search" className="text-white hover:bg-[#ab9dd3] px-3 py-2 rounded-md text-sm font-medium transition-colors">
+                  Search
+                </Link>
+                <Link href="/dashboard/messages" className="text-white hover:bg-[#ab9dd3] px-3 py-2 rounded-md text-sm font-medium transition-colors">
+                  Messages
+                </Link>
+                <Link href="/dashboard/profile" className="text-white hover:bg-[#ab9dd3] px-3 py-2 rounded-md text-sm font-medium transition-colors">
+                  Profile
+                </Link>
+              </div>
+            </div>
+            <div className="flex items-center space-x-4">
+              <span className="text-white text-sm">Welcome, {firstName}</span>
+              <button
+                onClick={handleLogout}
+                className="px-4 py-2 bg-[#68baa5] text-white rounded-md hover:bg-[#5aa594] transition-colors font-medium"
+              >
+                Logout
+              </button>
+            </div>
+          </div>
+        </div>
+      </nav>
+
+      {/* Main content */}
+      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <div className="px-4 py-6 sm:px-0">
+          <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+            <h1 className="text-2xl font-bold text-[#6c5ce7] mb-4">Search</h1>
+            
+            <div className="flex flex-col space-y-4">
+              <div className="flex space-x-4">
+                <button
+                  onClick={() => {
+                    setSearchType('users');
+                    setSelectedTag(null);
+                    setSearchTerm('');
+                  }}
+                  className={`px-4 py-2 rounded-lg ${
+                    searchType === 'users'
+                      ? 'bg-[#6c5ce7] text-white'
+                      : 'bg-gray-200 text-gray-700'
+                  }`}
+                >
+                  Users
+                </button>
+                <button
+                  onClick={() => {
+                    setSearchType('posts');
+                    setSelectedTag(null);
+                    setSearchTerm('');
+                  }}
+                  className={`px-4 py-2 rounded-lg ${
+                    searchType === 'posts'
+                      ? 'bg-[#6c5ce7] text-white'
+                      : 'bg-gray-200 text-gray-700'
+                  }`}
+                >
+                  Posts
+                </button>
+              </div>
+
+              {searchType === 'users' && (
+                <div className="flex space-x-2">
+                  <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="Search by username..."
+                    className="flex-1 px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-[#6c5ce7] focus:border-transparent"
+                  />
+                </div>
+              )}
+
+              {searchType === 'posts' && (
+                <div className="flex flex-wrap gap-2">
+                  {interests.map((tag) => (
+                    <button
+                      key={tag}
+                      onClick={() => handleTagClick(tag)}
+                      className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
+                        selectedTag === tag
+                          ? 'bg-[#6c5ce7] text-white'
+                          : 'bg-[#f6ebff] text-[#6c5ce7] border border-[#ab9dd3] hover:bg-[#e6d9ff]'
+                      }`}
+                    >
+                      #{tag}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-lg mb-6">
+              {error}
+            </div>
+          )}
+
+          <div className="space-y-4">
+            {isLoading ? (
+              <div className="flex justify-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#6c5ce7]"></div>
+              </div>
+            ) : searchResults.length > 0 ? (
+              searchType === 'users' ? (
+                // User search results
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {searchResults.map((user) => (
+                    <Link
+                      key={user.id}
+                      href={`/dashboard/profile/${user.id}`}
+                      className="bg-white rounded-lg shadow-md p-4 hover:shadow-lg transition-shadow"
+                    >
+                      <div className="flex items-center space-x-4">
+                        <div className="relative w-12 h-12">
+                          <Image
+                            src={user.photoURL || '/default-avatar.svg'}
+                            alt={user.username}
+                            fill
+                            className="rounded-full object-cover"
+                          />
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-[#6c5ce7]">{user.username}</h3>
+                          <p className="text-gray-600 text-sm">{user.bio || 'No bio available'}</p>
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                // Post search results
+                <div className="space-y-4">
+                  {searchResults.map((post) => {
+                    const userProfile = userProfiles[post.userId];
+                    return (
+                      <div key={post.id} className="bg-white rounded-lg shadow-md p-4">
+                        <div className="flex items-center space-x-3 mb-3">
+                          <div className="relative w-10 h-10">
+                            <Image
+                              src={userProfile?.photoURL || '/default-avatar.svg'}
+                              alt={userProfile?.username || 'User avatar'}
+                              fill
+                              className="rounded-full object-cover"
+                            />
+                          </div>
+                          <div>
+                            <p className="font-semibold text-[#6c5ce7]">
+                              {userProfile?.username || 'Unknown User'}
+                            </p>
+                            <p className="text-sm text-gray-500">
+                              {post.createdAt?.toDate().toLocaleDateString()}
+                            </p>
+                          </div>
+                        </div>
+                        <p className="text-gray-800">{post.content}</p>
+                        {post.tags && post.tags.length > 0 && (
+                          <div className="flex flex-wrap gap-2 mt-3">
+                            {post.tags.map((tag: string) => (
+                              <span
+                                key={tag}
+                                className="px-2 py-1 bg-[#f6ebff] text-[#6c5ce7] rounded-full text-sm"
+                              >
+                                #{tag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )
+            ) : searchTerm && !isLoading ? (
+              <div className="text-center text-gray-500 py-8">
+                No results found
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </main>
+
+      {/* Bottom banner */}
+      <div className="fixed bottom-0 left-0 right-0 bg-[#6c5ce7] text-white p-4 text-center shadow-lg">
+        <p>Welcome to Yapp! Share your positive affirmations and creative stories!</p>
+      </div>
+    </div>
+  );
+} 

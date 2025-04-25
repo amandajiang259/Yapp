@@ -144,7 +144,7 @@ export default function CreatePost() {
         userId: user.uid,
         type: 'story',
         content: content.trim(),
-        tags: selectedTags,
+        tags: selectedTags.map(tag => tag.toLowerCase()),
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
