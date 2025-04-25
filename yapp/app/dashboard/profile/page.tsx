@@ -288,6 +288,9 @@ export default function Profile() {
                 <Link href="/dashboard/messages" className="text-white hover:bg-[#ab9dd3] px-3 py-2 rounded-md text-sm font-medium transition-colors">
                   Messages
                 </Link>
+                <Link href="/dashboard/affirmations" className="text-white hover:bg-[#ab9dd3] px-3 py-2 rounded-md text-sm font-medium transition-colors">
+                  Affirmations
+                </Link>
                 <Link href="/dashboard/profile" className="text-white hover:bg-[#ab9dd3] px-3 py-2 rounded-md text-sm font-medium transition-colors">
                   Profile
                 </Link>
@@ -487,7 +490,10 @@ export default function Profile() {
                       )}
                       {post.type === 'story' && (
                         <div className="space-y-2">
-                          <p className="text-gray-700">{post.content}</p>
+                          <div 
+                            className="text-gray-700"
+                            dangerouslySetInnerHTML={{ __html: post.formattedContent || post.content }}
+                          />
                           {post.tags && (
                             <div className="flex flex-wrap gap-2">
                               {post.tags.map((tag: string) => (
