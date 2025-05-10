@@ -1,6 +1,7 @@
 [build]
-  command = "npm run build"
-  publish = "out"  # If using export; else use .next for SSR
+  command = "npm run build && npm run export"
+  publish = "out"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
+
