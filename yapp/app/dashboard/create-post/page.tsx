@@ -173,6 +173,15 @@ function EditorContent() {
     });
   };
 
+  const handleLogout = async () => {
+    try {
+      await auth.signOut();
+      router.push("/");
+    } catch (error) {
+      console.error("Logout Error:", error);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#f6ebff] flex flex-col">
       {/* Navigation */}
@@ -207,7 +216,7 @@ function EditorContent() {
             <div className="flex items-center space-x-4">
               <span className="text-white text-sm">Welcome, {currentUserData?.firstName || 'User'}</span>
               <button
-                onClick={() => auth.signOut()}
+                onClick={handleLogout}
                 className="px-4 py-2 bg-[#68baa5] text-white rounded-md hover:bg-[#5aa594] transition-colors font-medium"
               >
                 Logout
