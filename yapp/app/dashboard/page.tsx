@@ -40,29 +40,50 @@ export default function Dashboard() {
     const unsubscribe = auth.onAuthStateChanged(async (user: User | null) => {
       if (!user) {
         router.push('/');
-      } else {
+        return;
+      }
+      
+      try {
         setUser(user);
+        setCurrentUser(user);
         // Fetch user profile data
         const userDoc = await getDoc(doc(db, 'users', user.uid));
         if (userDoc.exists()) {
-          setFirstName(userDoc.data().firstName);
+          const userData = userDoc.data();
+          setFirstName(userData.firstName || '');
+          setUserProfile(userData);
         }
+      } catch (error) {
+        console.error('Error fetching user data:', error);
+      } finally {
+        setIsLoading(false);
       }
     });
 
     // Set daily affirmation and weekly prompt
     setCurrentPrompt(generateWeeklyPrompt());
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+    };
   }, [router]);
 
   const handleLogout = async () => {
     try {
       await signOut(auth);
+      router.push('/');
     } catch (error) {
       console.error("Logout Error:", error);
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-[#f6ebff] flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#6c5ce7]"></div>
+      </div>
+    );
+  }
 
   if (!user) {
     return null; // The useEffect will handle the redirect to login
@@ -100,7 +121,7 @@ export default function Dashboard() {
               </div>
             </div>
             <div className="flex items-center space-x-4">
-              <span className="text-white text-sm">Welcome, {firstName}</span>
+              <span className="text-white text-sm">Welcome, {firstName || 'User'}</span>
               <button
                 onClick={handleLogout}
                 className="px-4 py-2 bg-[#68baa5] text-white rounded-md hover:bg-[#5aa594] transition-colors font-medium"

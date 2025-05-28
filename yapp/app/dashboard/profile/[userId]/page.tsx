@@ -5,6 +5,8 @@ import { useParams } from 'next/navigation';
 import { auth, db } from '../../../authentication/firebase';
 import { doc, getDoc, collection, query, where, getDocs, orderBy, updateDoc } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
+import { useIsFollowing } from '@/hooks/useIsFollowing';
+import { followUser, unfollowUser } from '@/lib/followActions';
 import Image from 'next/image';
 import Link from 'next/link';
 import { LexicalComposer } from '@lexical/react/LexicalComposer';
@@ -43,15 +45,19 @@ export default function UserProfile() {
   const router = useRouter();
   const [user, setUser] = useState<UserData | null>(null);
   const [currentUserData, setCurrentUserData] = useState<UserData | null>(null);
+  const initialFollowing = useIsFollowing(userId);
+  const [isFollowingState, setIsFollowingState] = useState<boolean | null>(null);
+
+// Keep synced when hook loads
+  useEffect(() => {
+    if (initialFollowing !== null) {
+      setIsFollowingState(initialFollowing);
+    }
+  }, [initialFollowing]);
   const [posts, setPosts] = useState<Post[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const [isFollowing, setIsFollowing] = useState(false);
-  const [showFollowers, setShowFollowers] = useState(false);
-  const [showFollowing, setShowFollowing] = useState(false);
-  const [followersList, setFollowersList] = useState<UserData[]>([]);
-  const [followingList, setFollowingList] = useState<UserData[]>([]);
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (user) => {
@@ -314,31 +320,12 @@ export default function UserProfile() {
           <div className="flex items-center space-x-6 mb-6">
             <div className="relative w-24 h-24">
               <Image
-                src={user.photoURL || '/default-avatar.svg'}
-                alt={`${user.firstName} ${user.lastName}'s profile picture`}
-                fill
-                className="rounded-full object-cover"
+                  src={user.photoURL || '/default-avatar.svg'}
+                  alt={`${user.firstName} ${user.lastName}'s profile picture`}
+                  fill
+                  className="rounded-full object-cover"
               />
             </div>
-            <div className="flex-1">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h1 className="text-2xl font-bold text-[#6c5ce7]">{user.username}</h1>
-                  <p className="text-gray-600">{user.firstName} {user.lastName}</p>
-                </div>
-                {currentUserData && currentUserData.id !== user.id && (
-                  <button
-                    onClick={handleFollow}
-                    className={`px-4 py-2 rounded-md font-medium transition-colors ${
-                      isFollowing 
-                        ? 'bg-gray-200 text-gray-700 hover:bg-gray-300' 
-                        : 'bg-[#68baa5] text-white hover:bg-[#5aa594]'
-                    }`}
-                  >
-                    {isFollowing ? 'Following' : 'Follow'}
-                  </button>
-                )}
-              </div>
               <p className="text-gray-600 mt-2">{user.bio || 'No bio available'}</p>
               <div className="flex space-x-4 mt-2">
                 <button
@@ -439,19 +426,19 @@ export default function UserProfile() {
 
           {/* Interests */}
           {user.interests && user.interests.length > 0 && (
-            <div className="mb-6">
-              <h2 className="text-lg font-semibold text-[#6c5ce7] mb-2">Interests</h2>
-              <div className="flex flex-wrap gap-2">
-                {user.interests.map((interest) => (
-                  <span
-                    key={interest}
-                    className="px-3 py-1 bg-[#f6ebff] text-[#6c5ce7] rounded-full text-sm"
-                  >
-                    {interest}
-                  </span>
-                ))}
+              <div className="mb-6">
+                <h2 className="text-lg font-semibold text-[#6c5ce7] mb-2">Interests</h2>
+                <div className="flex flex-wrap gap-2">
+                  {user.interests.map((interest) => (
+                      <span
+                          key={interest}
+                          className="px-3 py-1 bg-[#f6ebff] text-[#6c5ce7] rounded-full text-sm"
+                      >
+            {interest}
+          </span>
+                  ))}
+                </div>
               </div>
-            </div>
           )}
         </div>
 

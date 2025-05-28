@@ -24,6 +24,7 @@ import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin';
 import { $getRoot, $getSelection } from 'lexical';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import ToolbarPlugin from './ToolbarPlugin';
+import ImageUploader from "@/components/retreiveImage";
 import './editor.css';
 
 const INTERESTS = [
@@ -88,7 +89,7 @@ const initialConfig = {
   ]
 };
 
-function EditorContent() {
+function EditorContent({ user }: { user: User | null }) {
   const [editor] = useLexicalComposerContext();
   const [content, setContent] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -265,7 +266,12 @@ function EditorContent() {
                     </div>
                   </div>
                 </div>
-
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Upload Image
+                </label>
+                  <ImageUploader userId={user?.uid} tags={selectedTags} />
+              </div>
                 <div>
                   <label className="block text-sm font-medium text-[#6c5ce7] mb-2">
                     Select Tags (1-3)
@@ -290,7 +296,6 @@ function EditorContent() {
                     {selectedTags.length}/3 tags selected
                   </p>
                 </div>
-
                 <div className="flex justify-end">
                   <button
                     type="submit"
@@ -339,7 +344,7 @@ export default function CreatePost() {
 
   return (
     <LexicalComposer initialConfig={initialConfig}>
-      <EditorContent />
+      <EditorContent user={user} />
     </LexicalComposer>
   );
 } 
