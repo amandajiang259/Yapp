@@ -10,13 +10,32 @@ import Link from 'next/link';
 import ReactCrop, { Crop } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
 
+interface ProfileData {
+  username: string;
+  bio: string;
+  photoURL: string;
+  firstName: string;
+  followers?: string[];
+  following?: string[];
+}
+
+interface UserData {
+  id: string;
+  username: string;
+  firstName: string;
+  lastName: string;
+  photoURL: string;
+}
+
 export default function Profile() {
   const [user, setUser] = useState<User | null>(null);
-  const [profileData, setProfileData] = useState({
+  const [profileData, setProfileData] = useState<ProfileData>({
     username: '',
     bio: '',
     photoURL: '/default-avatar.svg',
-    firstName: ''
+    firstName: '',
+    followers: [],
+    following: []
   });
   const [isEditing, setIsEditing] = useState(false);
   const [editedData, setEditedData] = useState({
@@ -39,9 +58,13 @@ export default function Profile() {
   const router = useRouter();
   const [showCropModal, setShowCropModal] = useState(false);
   const [originalImage, setOriginalImage] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'photos' | 'videos' | 'stories'>('photos');
+  const [activeTab, setActiveTab] = useState<'posts'>('posts');
   const [posts, setPosts] = useState<any[]>([]);
   const [isLoadingPosts, setIsLoadingPosts] = useState(false);
+  const [showFollowers, setShowFollowers] = useState(false);
+  const [showFollowing, setShowFollowing] = useState(false);
+  const [followersList, setFollowersList] = useState<UserData[]>([]);
+  const [followingList, setFollowingList] = useState<UserData[]>([]);
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (user: User | null) => {
@@ -61,21 +84,67 @@ export default function Profile() {
       const userDoc = await getDoc(doc(db, 'users', userId));
       if (userDoc.exists()) {
         const data = userDoc.data();
-        setProfileData({
+        const profileData = {
           username: data.username || '',
           bio: data.bio || '',
           photoURL: data.photoURL || '/default-avatar.svg',
-          firstName: data.firstName || ''
-        });
+          firstName: data.firstName || '',
+          followers: data.followers || [],
+          following: data.following || []
+        };
+        setProfileData(profileData);
         setEditedData({
           username: data.username || '',
           bio: data.bio || ''
         });
         setPreviewURL(null);
+        
+        // Fetch followers and following data
+        await fetchFollowersAndFollowing(profileData.followers || [], profileData.following || []);
       }
     } catch (error) {
       console.error('Error fetching profile:', error);
       setError('Failed to load profile data');
+    }
+  };
+
+  const fetchFollowersAndFollowing = async (followers: string[], following: string[]) => {
+    try {
+      // Fetch followers data
+      const followersPromises = [...new Set(followers)].map(async (followerId) => {
+        const followerDoc = await getDoc(doc(db, 'users', followerId));
+        if (followerDoc.exists()) {
+          return {
+            id: followerDoc.id,
+            ...followerDoc.data()
+          } as UserData;
+        }
+        return null;
+      });
+
+      // Fetch following data
+      const followingPromises = [...new Set(following)].map(async (followingId) => {
+        const followingDoc = await getDoc(doc(db, 'users', followingId));
+        if (followingDoc.exists()) {
+          return {
+            id: followingDoc.id,
+            ...followingDoc.data()
+          } as UserData;
+        }
+        return null;
+      });
+
+      const followersData = (await Promise.all(followersPromises)).filter(Boolean) as UserData[];
+      const followingData = (await Promise.all(followingPromises)).filter(Boolean) as UserData[];
+
+      // Remove duplicates
+      const uniqueFollowers = Array.from(new Map(followersData.map(user => [user.id, user])).values());
+      const uniqueFollowing = Array.from(new Map(followingData.map(user => [user.id, user])).values());
+
+      setFollowersList(uniqueFollowers);
+      setFollowingList(uniqueFollowing);
+    } catch (error) {
+      console.error('Error fetching followers/following:', error);
     }
   };
 
@@ -289,7 +358,7 @@ export default function Profile() {
                   Messages
                 </Link>
                 <Link href="/dashboard/affirmations" className="text-white hover:bg-[#ab9dd3] px-3 py-2 rounded-md text-sm font-medium transition-colors">
-                  Affirmations
+                  Weekly Discussion
                 </Link>
                 <Link href="/dashboard/profile" className="text-white hover:bg-[#ab9dd3] px-3 py-2 rounded-md text-sm font-medium transition-colors">
                   Profile
@@ -421,93 +490,36 @@ export default function Profile() {
 
           {/* Posts Section */}
           <div className="bg-white rounded-lg shadow-lg p-6 mt-8">
-            <div className="flex border-b border-gray-200 mb-6">
-              <button
-                onClick={() => setActiveTab('photos')}
-                className={`px-4 py-2 font-medium text-sm ${
-                  activeTab === 'photos'
-                    ? 'text-[#6c5ce7] border-b-2 border-[#6c5ce7]'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                Photos
-              </button>
-              <button
-                onClick={() => setActiveTab('videos')}
-                className={`px-4 py-2 font-medium text-sm ${
-                  activeTab === 'videos'
-                    ? 'text-[#6c5ce7] border-b-2 border-[#6c5ce7]'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                Videos
-              </button>
-              <button
-                onClick={() => setActiveTab('stories')}
-                className={`px-4 py-2 font-medium text-sm ${
-                  activeTab === 'stories'
-                    ? 'text-[#6c5ce7] border-b-2 border-[#6c5ce7]'
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                Stories
-              </button>
-            </div>
+            <h2 className="text-xl font-bold text-[#6c5ce7] mb-6">Posts</h2>
 
             {isLoadingPosts ? (
               <div className="flex justify-center items-center h-32">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#6c5ce7]"></div>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 gap-4">
                 {posts
-                  .filter(post => {
-                    if (activeTab === 'photos') return post.type === 'photo';
-                    if (activeTab === 'videos') return post.type === 'video';
-                    if (activeTab === 'stories') return post.type === 'story';
-                    return false;
-                  })
+                  .filter(post => post.type === 'story')
                   .map(post => (
                     <div key={post.id} className="bg-[#f6ebff] rounded-lg p-4">
-                      {post.type === 'photo' && (
-                        <div className="relative aspect-square">
-                          <Image
-                            src={post.content}
-                            alt="Post photo"
-                            fill
-                            className="rounded-lg object-cover"
-                          />
-                        </div>
-                      )}
-                      {post.type === 'video' && (
-                        <div className="relative aspect-video">
-                          <video
-                            src={post.content}
-                            controls
-                            className="rounded-lg w-full h-full object-cover"
-                          />
-                        </div>
-                      )}
-                      {post.type === 'story' && (
-                        <div className="space-y-2">
-                          <div 
-                            className="text-gray-700"
-                            dangerouslySetInnerHTML={{ __html: post.formattedContent || post.content }}
-                          />
-                          {post.tags && (
-                            <div className="flex flex-wrap gap-2">
-                              {post.tags.map((tag: string) => (
-                                <span
-                                  key={tag}
-                                  className="px-2 py-1 bg-[#6c5ce7] text-white text-xs rounded-full"
-                                >
-                                  #{tag}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
+                      <div className="space-y-2">
+                        <div 
+                          className="text-gray-700"
+                          dangerouslySetInnerHTML={{ __html: post.formattedContent || post.content }}
+                        />
+                        {post.tags && (
+                          <div className="flex flex-wrap gap-2">
+                            {post.tags.map((tag: string) => (
+                              <span
+                                key={tag}
+                                className="px-2 py-1 bg-[#6c5ce7] text-white text-xs rounded-full"
+                              >
+                                #{tag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                       <div className="mt-2 flex justify-between items-center">
                         <div className="text-sm text-gray-500">
                           {post.createdAt ? new Date(post.createdAt.seconds * 1000).toLocaleDateString('en-US', {
@@ -525,14 +537,9 @@ export default function Profile() {
                       </div>
                     </div>
                   ))}
-                {posts.filter(post => {
-                  if (activeTab === 'photos') return post.type === 'photo';
-                  if (activeTab === 'videos') return post.type === 'video';
-                  if (activeTab === 'stories') return post.type === 'story';
-                  return false;
-                }).length === 0 && (
+                {posts.filter(post => post.type === 'story').length === 0 && (
                   <div className="col-span-full text-center text-gray-500 py-8">
-                    No {activeTab} posts yet
+                    No posts yet
                   </div>
                 )}
               </div>
@@ -587,6 +594,86 @@ export default function Profile() {
               >
                 Apply Crop
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Followers Modal */}
+      {showFollowers && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full max-h-[80vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-[#6c5ce7]">Followers</h2>
+              <button
+                onClick={() => setShowFollowers(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="space-y-4">
+              {followersList.map((follower) => (
+                <div key={`follower-${follower.id}`} className="flex items-center space-x-4">
+                  <div className="relative w-10 h-10">
+                    <Image
+                      src={follower.photoURL || '/default-avatar.svg'}
+                      alt={`${follower.firstName}'s profile picture`}
+                      fill
+                      className="rounded-full object-cover"
+                    />
+                  </div>
+                  <div>
+                    <Link
+                      href={`/dashboard/profile/${follower.id}`}
+                      className="font-semibold text-[#6c5ce7] hover:underline"
+                    >
+                      {follower.username}
+                    </Link>
+                    <p className="text-gray-600 text-sm">{follower.firstName} {follower.lastName}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Following Modal */}
+      {showFollowing && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full max-h-[80vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-[#6c5ce7]">Following</h2>
+              <button
+                onClick={() => setShowFollowing(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="space-y-4">
+              {followingList.map((following) => (
+                <div key={`following-${following.id}`} className="flex items-center space-x-4">
+                  <div className="relative w-10 h-10">
+                    <Image
+                      src={following.photoURL || '/default-avatar.svg'}
+                      alt={`${following.firstName}'s profile picture`}
+                      fill
+                      className="rounded-full object-cover"
+                    />
+                  </div>
+                  <div>
+                    <Link
+                      href={`/dashboard/profile/${following.id}`}
+                      className="font-semibold text-[#6c5ce7] hover:underline"
+                    >
+                      {following.username}
+                    </Link>
+                    <p className="text-gray-600 text-sm">{following.firstName} {following.lastName}</p>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>

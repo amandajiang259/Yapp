@@ -5,7 +5,9 @@ import {
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword, 
   signOut, 
-  sendPasswordResetEmail 
+  sendPasswordResetEmail,
+  GoogleAuthProvider,
+  signInWithPopup
 } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
 
@@ -44,6 +46,7 @@ const db = initializeFirestore(app, {
 
 // Initialize Auth
 const auth = getAuth(app);
+const provider = new GoogleAuthProvider();
 
 // Initialize Storage
 const storage = getStorage(app);
@@ -51,6 +54,8 @@ const storage = getStorage(app);
 export { 
   db, 
   auth,
+  provider,
+  signInWithPopup,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,

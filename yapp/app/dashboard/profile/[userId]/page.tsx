@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { auth, db } from '../../../authentication/firebase';
-import { doc, getDoc, collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, orderBy, updateDoc } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 import { useIsFollowing } from '@/hooks/useIsFollowing';
 import { followUser, unfollowUser } from '@/lib/followActions';
@@ -24,6 +24,8 @@ interface UserData {
   bio: string;
   photoURL: string;
   interests: string[];
+  followers?: string[];
+  following?: string[];
 }
 
 interface Post {
@@ -56,7 +58,6 @@ export default function UserProfile() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const [isHovering, setIsHovering] = useState(false);
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (user) => {
@@ -125,6 +126,117 @@ export default function UserProfile() {
     }
   }, [userId]);
 
+  useEffect(() => {
+    if (currentUserData && user) {
+      setIsFollowing(user.followers?.includes(currentUserData.id) || false);
+    }
+  }, [currentUserData, user]);
+
+  useEffect(() => {
+    const fetchFollowersAndFollowing = async () => {
+      if (!user) return;
+
+      try {
+        // Fetch followers and remove duplicates
+        const followersPromises = [...new Set(user.followers || [])].map(async (followerId) => {
+          const followerDoc = await getDoc(doc(db, 'users', followerId));
+          if (followerDoc.exists()) {
+            return {
+              id: followerDoc.id,
+              ...followerDoc.data()
+            } as UserData;
+          }
+          return null;
+        });
+
+        // Fetch following and remove duplicates
+        const followingPromises = [...new Set(user.following || [])].map(async (followingId) => {
+          const followingDoc = await getDoc(doc(db, 'users', followingId));
+          if (followingDoc.exists()) {
+            return {
+              id: followingDoc.id,
+              ...followingDoc.data()
+            } as UserData;
+          }
+          return null;
+        });
+
+        const followers = (await Promise.all(followersPromises)).filter(Boolean) as UserData[];
+        const following = (await Promise.all(followingPromises)).filter(Boolean) as UserData[];
+
+        // Remove any remaining duplicates by ID
+        const uniqueFollowers = Array.from(new Map(followers.map(user => [user.id, user])).values());
+        const uniqueFollowing = Array.from(new Map(following.map(user => [user.id, user])).values());
+
+        setFollowersList(uniqueFollowers);
+        setFollowingList(uniqueFollowing);
+      } catch (error) {
+        console.error('Error fetching followers/following:', error);
+      }
+    };
+
+    fetchFollowersAndFollowing();
+  }, [user]);
+
+  const handleFollow = async () => {
+    if (!currentUserData || !user) return;
+
+    try {
+      const userRef = doc(db, 'users', user.id);
+      const currentUserRef = doc(db, 'users', currentUserData.id);
+      
+      if (isFollowing) {
+        // Unfollow
+        const updatedFollowers = (user.followers || []).filter(id => id !== currentUserData.id);
+        const updatedFollowing = (currentUserData.following || []).filter(id => id !== user.id);
+        
+        await updateDoc(userRef, {
+          followers: updatedFollowers
+        });
+        await updateDoc(currentUserRef, {
+          following: updatedFollowing
+        });
+        setIsFollowing(false);
+      } else {
+        // Follow - Check if already following to prevent duplicates
+        const isAlreadyFollowing = (currentUserData.following || []).includes(user.id);
+        if (!isAlreadyFollowing) {
+          const updatedFollowers = [...new Set([...(user.followers || []), currentUserData.id])];
+          const updatedFollowing = [...new Set([...(currentUserData.following || []), user.id])];
+          
+          await updateDoc(userRef, {
+            followers: updatedFollowers
+          });
+          await updateDoc(currentUserRef, {
+            following: updatedFollowing
+          });
+          setIsFollowing(true);
+        }
+      }
+
+      // Refresh user data
+      const updatedUserDoc = await getDoc(userRef);
+      if (updatedUserDoc.exists()) {
+        setUser({
+          id: updatedUserDoc.id,
+          ...updatedUserDoc.data()
+        } as UserData);
+      }
+
+      // Refresh current user data
+      const updatedCurrentUserDoc = await getDoc(currentUserRef);
+      if (updatedCurrentUserDoc.exists()) {
+        setCurrentUserData({
+          id: updatedCurrentUserDoc.id,
+          ...updatedCurrentUserDoc.data()
+        } as UserData);
+      }
+    } catch (error) {
+      console.error('Error updating follow status:', error);
+      setError('Failed to update follow status');
+    }
+  };
+
   if (!currentUser) {
     return null;
   }
@@ -181,7 +293,7 @@ export default function UserProfile() {
                   Messages
                 </Link>
                 <Link href="/dashboard/affirmations" className="text-white hover:bg-[#ab9dd3] px-3 py-2 rounded-md text-sm font-medium transition-colors">
-                  Affirmations
+                  Weekly Discussion
                 </Link>
                 <Link href="/dashboard/profile" className="text-white hover:bg-[#ab9dd3] px-3 py-2 rounded-md text-sm font-medium transition-colors">
                   Profile
@@ -214,45 +326,103 @@ export default function UserProfile() {
                   className="rounded-full object-cover"
               />
             </div>
-
-            <div className="flex-1">
-              <div className="flex items-center space-x-4">
-                <h1 className="text-2xl font-bold text-[#6c5ce7]">{user.username}</h1>
-
-                {currentUser?.uid !== userId && (
-                    isFollowingState === null ? (
-                        <p className="text-sm text-gray-500">Checking...</p>
-                    ) : (
-                        <button
-                            onMouseEnter={() => setIsHovering(true)}
-                            onMouseLeave={() => setIsHovering(false)}
-                            onClick={async () => {
-                              if (isFollowingState) {
-                                await unfollowUser(userId);
-                                setIsFollowingState(false);
-                              } else {
-                                await followUser(userId);
-                                await followUser(userId);
-                                setIsFollowingState(true);
-                              }
-                              // window.location.reload();
-                            }}
-                            className={`px-3 py-1 text-sm rounded text-white font-medium transition-colors ${
-                                isFollowingState
-                                    ? 'bg-[#68baa5] hover:bg-red-500'
-                                    : 'bg-[#68baa5] hover:bg-[#5aa594]'
-                            }`}
-                        >
-                          {isFollowingState ? (isHovering ? 'Unfollow' : 'Following') : 'Follow'}
-                        </button>
-                    )
-                )}
-              </div>
-
-              <p className="text-gray-600">{user.firstName} {user.lastName}</p>
               <p className="text-gray-600 mt-2">{user.bio || 'No bio available'}</p>
+              <div className="flex space-x-4 mt-2">
+                <button
+                  onClick={() => setShowFollowers(!showFollowers)}
+                  className="text-gray-600 hover:text-[#6c5ce7] transition-colors"
+                >
+                  <span className="font-semibold">{user.followers?.length || 0}</span> Followers
+                </button>
+                <button
+                  onClick={() => setShowFollowing(!showFollowing)}
+                  className="text-gray-600 hover:text-[#6c5ce7] transition-colors"
+                >
+                  <span className="font-semibold">{user.following?.length || 0}</span> Following
+                </button>
+              </div>
             </div>
           </div>
+
+          {/* Followers Modal */}
+          {showFollowers && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div className="bg-white rounded-lg p-6 max-w-md w-full max-h-[80vh] overflow-y-auto">
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-xl font-bold text-[#6c5ce7]">Followers</h2>
+                  <button
+                    onClick={() => setShowFollowers(false)}
+                    className="text-gray-500 hover:text-gray-700"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="space-y-4">
+                  {followersList.map((follower) => (
+                    <div key={`follower-${follower.id}`} className="flex items-center space-x-4">
+                      <div className="relative w-10 h-10">
+                        <Image
+                          src={follower.photoURL || '/default-avatar.svg'}
+                          alt={`${follower.firstName}'s profile picture`}
+                          fill
+                          className="rounded-full object-cover"
+                        />
+                      </div>
+                      <div>
+                        <Link
+                          href={`/dashboard/profile/${follower.id}`}
+                          className="font-semibold text-[#6c5ce7] hover:underline"
+                        >
+                          {follower.username}
+                        </Link>
+                        <p className="text-gray-600 text-sm">{follower.firstName} {follower.lastName}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Following Modal */}
+          {showFollowing && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div className="bg-white rounded-lg p-6 max-w-md w-full max-h-[80vh] overflow-y-auto">
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-xl font-bold text-[#6c5ce7]">Following</h2>
+                  <button
+                    onClick={() => setShowFollowing(false)}
+                    className="text-gray-500 hover:text-gray-700"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="space-y-4">
+                  {followingList.map((following) => (
+                    <div key={`following-${following.id}`} className="flex items-center space-x-4">
+                      <div className="relative w-10 h-10">
+                        <Image
+                          src={following.photoURL || '/default-avatar.svg'}
+                          alt={`${following.firstName}'s profile picture`}
+                          fill
+                          className="rounded-full object-cover"
+                        />
+                      </div>
+                      <div>
+                        <Link
+                          href={`/dashboard/profile/${following.id}`}
+                          className="font-semibold text-[#6c5ce7] hover:underline"
+                        >
+                          {following.username}
+                        </Link>
+                        <p className="text-gray-600 text-sm">{following.firstName} {following.lastName}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Interests */}
           {user.interests && user.interests.length > 0 && (
