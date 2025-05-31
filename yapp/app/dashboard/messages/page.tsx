@@ -53,6 +53,7 @@ export default function Messages() {
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (user) => {
@@ -120,6 +121,7 @@ export default function Messages() {
   useEffect(() => {
     if (!selectedConversation || !currentUser) return;
 
+    setError(null);
     // Fetch messages for selected conversation
     const messagesRef = collection(db, 'messages');
     const q = query(
@@ -139,6 +141,7 @@ export default function Messages() {
       },
       (error) => {
         console.error('Error fetching messages:', error);
+        setError('Unable to load messages. Please try again.');
         // If the error is due to missing index, show a user-friendly message
         if (error.code === 'failed-precondition') {
           console.log('Please create the required Firestore index for messages collection');
@@ -274,31 +277,38 @@ export default function Messages() {
     if (!newMessage.trim() || !selectedConversation || !currentUser) return;
 
     try {
+      // First, create the message
       const messagesRef = collection(db, 'messages');
-      await addDoc(messagesRef, {
+      const messageData = {
         text: newMessage,
         senderId: currentUser.uid,
         receiverId: selectedConversation.otherUser.id,
         conversationId: selectedConversation.id,
         createdAt: serverTimestamp(),
-        senderName: currentUser.displayName,
-        senderPhotoURL: currentUser.photoURL
-      });
+        senderName: currentUser.displayName || 'Unknown',
+        senderPhotoURL: currentUser.photoURL || '/default-avatar.svg'
+      };
 
-      // Update conversation's last message
-      const conversationsRef = collection(db, 'conversations');
-      const conversationDoc = doc(db, 'conversations', selectedConversation.id);
-      await updateDoc(conversationDoc, {
+      const messageRef = await addDoc(messagesRef, messageData);
+
+      // Then update the conversation's last message
+      const conversationRef = doc(db, 'conversations', selectedConversation.id);
+      await updateDoc(conversationRef, {
         lastMessage: {
-          text: newMessage,
-          createdAt: serverTimestamp(),
-          senderId: currentUser.uid
+          ...messageData,
+          id: messageRef.id
         }
       });
 
       setNewMessage('');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending message:', error);
+      // Show user-friendly error message
+      if (error.code === 'permission-denied') {
+        alert('Unable to send message. Please try again later.');
+      } else {
+        alert('An error occurred while sending the message. Please try again.');
+      }
     }
   };
 
@@ -495,27 +505,37 @@ export default function Messages() {
 
                   {/* Messages */}
                   <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                    {messages.map((message) => (
-                      <div
-                        key={message.id}
-                        className={`flex ${
-                          message.senderId === currentUser?.uid ? 'justify-end' : 'justify-start'
-                        }`}
-                      >
+                    {error ? (
+                      <div className="text-center text-red-500 p-4">
+                        {error}
+                      </div>
+                    ) : messages.length === 0 ? (
+                      <div className="text-center text-gray-500 p-4">
+                        No messages yet. Start the conversation!
+                      </div>
+                    ) : (
+                      messages.map((message: Message) => (
                         <div
-                          className={`max-w-[70%] rounded-lg p-3 ${
-                            message.senderId === currentUser?.uid
-                              ? 'bg-[#6c5ce7] text-white'
-                              : 'bg-gray-100 text-gray-800'
+                          key={message.id}
+                          className={`flex ${
+                            message.senderId === currentUser?.uid ? 'justify-end' : 'justify-start'
                           }`}
                         >
-                          <p>{message.text}</p>
-                          <p className="text-xs mt-1 opacity-70">
-                            {formatMessageTime(message.createdAt)}
-                          </p>
+                          <div
+                            className={`max-w-[70%] rounded-lg p-3 ${
+                              message.senderId === currentUser?.uid
+                                ? 'bg-[#6c5ce7] text-white'
+                                : 'bg-gray-100 text-gray-800'
+                            }`}
+                          >
+                            <p>{message.text}</p>
+                            <p className="text-xs mt-1 opacity-70">
+                              {formatMessageTime(message.createdAt)}
+                            </p>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))
+                    )}
                     <div ref={messagesEndRef} />
                   </div>
 

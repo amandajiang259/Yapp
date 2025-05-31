@@ -45,12 +45,53 @@ export default function AffirmationsPage() {
   const [error, setError] = useState<string | null>(null);
   const [currentPrompt, setCurrentPrompt] = useState('');
 
+  const fetchAffirmations = async () => {
+    if (!currentUser) {
+      console.log('No authenticated user found');
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const q = query(
+        collection(db, 'affirmations'),
+        where('userId', '==', currentUser.uid)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      const affirmationsData: Affirmation[] = [];
+      
+      for (const docSnapshot of querySnapshot.docs) {
+        const data = docSnapshot.data();
+        affirmationsData.push({
+          id: docSnapshot.id,
+          userId: data.userId,
+          content: data.content,
+          createdAt: data.createdAt,
+          userData: data.userData
+        });
+      }
+      
+      setAffirmations(affirmationsData);
+    } catch (error: any) {
+      console.error('Error fetching affirmations:', error);
+      setError(error.message || 'Failed to fetch affirmations');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (user) => {
       if (!user) {
         router.push('/');
-      } else {
-        setCurrentUser(user);
+        return;
+      }
+      
+      setCurrentUser(user);
+      try {
         // Fetch user profile data
         const userDoc = await getDoc(doc(db, 'users', user.uid));
         if (userDoc.exists()) {
@@ -59,10 +100,15 @@ export default function AffirmationsPage() {
             ...userDoc.data()
           } as UserData);
         }
+        // Only fetch affirmations after user data is loaded
+        await fetchAffirmations();
+      } catch (error) {
+        console.error('Error in auth state change:', error);
+        setError('Failed to load user data');
       }
     });
 
-    // Set the weekly prompt using the same function as the dashboard
+    // Set the weekly prompt
     setCurrentPrompt(generateWeeklyPrompt());
 
     return () => unsubscribe();
@@ -98,35 +144,6 @@ export default function AffirmationsPage() {
     }
   };
 
-  const fetchAffirmations = async () => {
-    if (!currentUser) return;
-
-    setIsLoading(true);
-    try {
-      const q = query(collection(db, 'affirmations'), where('userId', '==', currentUser.uid));
-      const querySnapshot = await getDocs(q);
-      const affirmationsData: Affirmation[] = [];
-      
-      for (const docSnapshot of querySnapshot.docs) {
-        const data = docSnapshot.data();
-        affirmationsData.push({
-          id: docSnapshot.id,
-          userId: data.userId,
-          content: data.content,
-          createdAt: data.createdAt,
-          userData: data.userData
-        });
-      }
-      
-      setAffirmations(affirmationsData);
-    } catch (error) {
-      console.error('Error fetching affirmations:', error);
-      setError('Failed to fetch affirmations');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const deleteAffirmation = async (affirmationId: string) => {
     if (!currentUser) return;
 
@@ -138,12 +155,6 @@ export default function AffirmationsPage() {
       setError('Failed to delete affirmation');
     }
   };
-
-  useEffect(() => {
-    if (currentUser) {
-      fetchAffirmations();
-    }
-  }, [currentUser]);
 
   return (
     <div className="min-h-screen bg-[#f6ebff]">
