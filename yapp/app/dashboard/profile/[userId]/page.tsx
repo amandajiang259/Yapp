@@ -47,17 +47,23 @@ export default function UserProfile() {
   const [currentUserData, setCurrentUserData] = useState<UserData | null>(null);
   const initialFollowing = useIsFollowing(userId);
   const [isFollowingState, setIsFollowingState] = useState<boolean | null>(null);
-
-// Keep synced when hook loads
-  useEffect(() => {
-    if (initialFollowing !== null) {
-      setIsFollowingState(initialFollowing);
-    }
-  }, [initialFollowing]);
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [showFollowers, setShowFollowers] = useState(false);
+  const [showFollowing, setShowFollowing] = useState(false);
+  const [followersList, setFollowersList] = useState<UserData[]>([]);
+  const [followingList, setFollowingList] = useState<UserData[]>([]);
   const [posts, setPosts] = useState<Post[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
+
+  // Keep synced when hook loads
+  useEffect(() => {
+    if (initialFollowing !== null) {
+      setIsFollowingState(initialFollowing);
+      setIsFollowing(initialFollowing);
+    }
+  }, [initialFollowing]);
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (user) => {
@@ -293,7 +299,7 @@ export default function UserProfile() {
                   Messages
                 </Link>
                 <Link href="/dashboard/affirmations" className="text-white hover:bg-[#ab9dd3] px-3 py-2 rounded-md text-sm font-medium transition-colors">
-                  Weekly Discussion
+                  Affirmations
                 </Link>
                 <Link href="/dashboard/profile" className="text-white hover:bg-[#ab9dd3] px-3 py-2 rounded-md text-sm font-medium transition-colors">
                   Profile
@@ -320,22 +326,39 @@ export default function UserProfile() {
           <div className="flex items-center space-x-6 mb-6">
             <div className="relative w-24 h-24">
               <Image
-                  src={user.photoURL || '/default-avatar.svg'}
-                  alt={`${user.firstName} ${user.lastName}'s profile picture`}
-                  fill
-                  className="rounded-full object-cover"
+                src={user.photoURL || '/default-avatar.svg'}
+                alt={`${user.firstName} ${user.lastName}'s profile picture`}
+                fill
+                className="rounded-full object-cover"
               />
             </div>
+            <div className="flex-1">
+              <div className="flex items-center space-x-4">
+                <h1 className="text-2xl font-bold text-[#6c5ce7]">{user.username}</h1>
+                {currentUser?.uid !== userId && (
+                  <button
+                    onClick={handleFollow}
+                    className={`px-3 py-1 text-sm rounded text-white font-medium transition-colors ${
+                      isFollowing
+                        ? 'bg-[#68baa5] hover:bg-red-500'
+                        : 'bg-[#68baa5] hover:bg-[#5aa594]'
+                    }`}
+                  >
+                    {isFollowing ? 'Unfollow' : 'Follow'}
+                  </button>
+                )}
+              </div>
+              <p className="text-gray-600">{user.firstName} {user.lastName}</p>
               <p className="text-gray-600 mt-2">{user.bio || 'No bio available'}</p>
-              <div className="flex space-x-4 mt-2">
+              <div className="flex space-x-4 mt-4">
                 <button
-                  onClick={() => setShowFollowers(!showFollowers)}
+                  onClick={() => setShowFollowers(true)}
                   className="text-gray-600 hover:text-[#6c5ce7] transition-colors"
                 >
                   <span className="font-semibold">{user.followers?.length || 0}</span> Followers
                 </button>
                 <button
-                  onClick={() => setShowFollowing(!showFollowing)}
+                  onClick={() => setShowFollowing(true)}
                   className="text-gray-600 hover:text-[#6c5ce7] transition-colors"
                 >
                   <span className="font-semibold">{user.following?.length || 0}</span> Following
@@ -343,104 +366,104 @@ export default function UserProfile() {
               </div>
             </div>
           </div>
-
-          {/* Followers Modal */}
-          {showFollowers && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-              <div className="bg-white rounded-lg p-6 max-w-md w-full max-h-[80vh] overflow-y-auto">
-                <div className="flex justify-between items-center mb-4">
-                  <h2 className="text-xl font-bold text-[#6c5ce7]">Followers</h2>
-                  <button
-                    onClick={() => setShowFollowers(false)}
-                    className="text-gray-500 hover:text-gray-700"
-                  >
-                    ✕
-                  </button>
-                </div>
-                <div className="space-y-4">
-                  {followersList.map((follower) => (
-                    <div key={`follower-${follower.id}`} className="flex items-center space-x-4">
-                      <div className="relative w-10 h-10">
-                        <Image
-                          src={follower.photoURL || '/default-avatar.svg'}
-                          alt={`${follower.firstName}'s profile picture`}
-                          fill
-                          className="rounded-full object-cover"
-                        />
-                      </div>
-                      <div>
-                        <Link
-                          href={`/dashboard/profile/${follower.id}`}
-                          className="font-semibold text-[#6c5ce7] hover:underline"
-                        >
-                          {follower.username}
-                        </Link>
-                        <p className="text-gray-600 text-sm">{follower.firstName} {follower.lastName}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Following Modal */}
-          {showFollowing && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-              <div className="bg-white rounded-lg p-6 max-w-md w-full max-h-[80vh] overflow-y-auto">
-                <div className="flex justify-between items-center mb-4">
-                  <h2 className="text-xl font-bold text-[#6c5ce7]">Following</h2>
-                  <button
-                    onClick={() => setShowFollowing(false)}
-                    className="text-gray-500 hover:text-gray-700"
-                  >
-                    ✕
-                  </button>
-                </div>
-                <div className="space-y-4">
-                  {followingList.map((following) => (
-                    <div key={`following-${following.id}`} className="flex items-center space-x-4">
-                      <div className="relative w-10 h-10">
-                        <Image
-                          src={following.photoURL || '/default-avatar.svg'}
-                          alt={`${following.firstName}'s profile picture`}
-                          fill
-                          className="rounded-full object-cover"
-                        />
-                      </div>
-                      <div>
-                        <Link
-                          href={`/dashboard/profile/${following.id}`}
-                          className="font-semibold text-[#6c5ce7] hover:underline"
-                        >
-                          {following.username}
-                        </Link>
-                        <p className="text-gray-600 text-sm">{following.firstName} {following.lastName}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Interests */}
-          {user.interests && user.interests.length > 0 && (
-              <div className="mb-6">
-                <h2 className="text-lg font-semibold text-[#6c5ce7] mb-2">Interests</h2>
-                <div className="flex flex-wrap gap-2">
-                  {user.interests.map((interest) => (
-                      <span
-                          key={interest}
-                          className="px-3 py-1 bg-[#f6ebff] text-[#6c5ce7] rounded-full text-sm"
-                      >
-            {interest}
-          </span>
-                  ))}
-                </div>
-              </div>
-          )}
         </div>
+
+        {/* Followers Modal */}
+        {showFollowers && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 max-w-md w-full max-h-[80vh] overflow-y-auto">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold text-[#6c5ce7]">Followers</h2>
+                <button
+                  onClick={() => setShowFollowers(false)}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="space-y-4">
+                {followersList.map((follower) => (
+                  <div key={`follower-${follower.id}`} className="flex items-center space-x-4">
+                    <div className="relative w-10 h-10">
+                      <Image
+                        src={follower.photoURL || '/default-avatar.svg'}
+                        alt={`${follower.firstName}'s profile picture`}
+                        fill
+                        className="rounded-full object-cover"
+                      />
+                    </div>
+                    <div>
+                      <Link
+                        href={`/dashboard/profile/${follower.id}`}
+                        className="font-semibold text-[#6c5ce7] hover:underline"
+                      >
+                        {follower.username}
+                      </Link>
+                      <p className="text-gray-600 text-sm">{follower.firstName} {follower.lastName}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Following Modal */}
+        {showFollowing && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 max-w-md w-full max-h-[80vh] overflow-y-auto">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold text-[#6c5ce7]">Following</h2>
+                <button
+                  onClick={() => setShowFollowing(false)}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="space-y-4">
+                {followingList.map((following) => (
+                  <div key={`following-${following.id}`} className="flex items-center space-x-4">
+                    <div className="relative w-10 h-10">
+                      <Image
+                        src={following.photoURL || '/default-avatar.svg'}
+                        alt={`${following.firstName}'s profile picture`}
+                        fill
+                        className="rounded-full object-cover"
+                      />
+                    </div>
+                    <div>
+                      <Link
+                        href={`/dashboard/profile/${following.id}`}
+                        className="font-semibold text-[#6c5ce7] hover:underline"
+                      >
+                        {following.username}
+                      </Link>
+                      <p className="text-gray-600 text-sm">{following.firstName} {following.lastName}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Interests */}
+        {user.interests && user.interests.length > 0 && (
+            <div className="mb-6">
+              <h2 className="text-lg font-semibold text-[#6c5ce7] mb-2">Interests</h2>
+              <div className="flex flex-wrap gap-2">
+                {user.interests.map((interest) => (
+                    <span
+                        key={interest}
+                        className="px-3 py-1 bg-[#f6ebff] text-[#6c5ce7] rounded-full text-sm"
+                    >
+              {interest}
+            </span>
+                ))}
+              </div>
+            </div>
+        )}
 
         {/* Posts */}
         <div className="space-y-4">
@@ -468,7 +491,7 @@ export default function UserProfile() {
                       {post.username}
                     </Link>
                     <p className="text-gray-500 text-sm">
-                      {new Date(post.createdAt?.toDate()).toLocaleDateString()}
+                      {post.createdAt?.toDate ? new Date(post.createdAt.toDate()).toLocaleDateString() : 'No date'}
                     </p>
                   </div>
                 </div>

@@ -142,10 +142,6 @@ export default function Messages() {
       (error) => {
         console.error('Error fetching messages:', error);
         setError('Unable to load messages. Please try again.');
-        // If the error is due to missing index, show a user-friendly message
-        if (error.code === 'failed-precondition') {
-          console.log('Please create the required Firestore index for messages collection');
-        }
       }
     );
 
@@ -285,8 +281,9 @@ export default function Messages() {
         receiverId: selectedConversation.otherUser.id,
         conversationId: selectedConversation.id,
         createdAt: serverTimestamp(),
-        senderName: currentUser.displayName || 'Unknown',
-        senderPhotoURL: currentUser.photoURL || '/default-avatar.svg'
+        senderName: userProfile?.username || 'Unknown',
+        senderPhotoURL: userProfile?.photoURL || '/default-avatar.svg',
+        read: false
       };
 
       const messageRef = await addDoc(messagesRef, messageData);
@@ -303,12 +300,7 @@ export default function Messages() {
       setNewMessage('');
     } catch (error: any) {
       console.error('Error sending message:', error);
-      // Show user-friendly error message
-      if (error.code === 'permission-denied') {
-        alert('Unable to send message. Please try again later.');
-      } else {
-        alert('An error occurred while sending the message. Please try again.');
-      }
+      setError('Unable to send message. Please try again.');
     }
   };
 
