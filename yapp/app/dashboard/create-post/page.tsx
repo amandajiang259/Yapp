@@ -24,7 +24,6 @@ import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin';
 import { $getRoot, $getSelection } from 'lexical';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import ToolbarPlugin from './ToolbarPlugin';
-import ImageUploader from "@/components/retreiveImage";
 import './editor.css';
 
 const INTERESTS = [
@@ -266,12 +265,6 @@ function EditorContent({ user }: { user: User | null }) {
                     </div>
                   </div>
                 </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Upload Image
-                </label>
-                  <ImageUploader userId={user?.uid} tags={selectedTags} />
-              </div>
                 <div>
                   <label className="block text-sm font-medium text-[#6c5ce7] mb-2">
                     Select Tags (1-3)
