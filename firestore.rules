@@ -8,7 +8,13 @@ service cloud.firestore {
     }
     
     function isOwner(userId) {
-      return request.auth.uid == userId;
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isParticipant(conversationId) {
+      return isAuthenticated() && 
+        exists(/databases/$(database)/documents/conversations/$(conversationId)) &&
+        request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
     }
 
     // Users collection
@@ -48,31 +54,47 @@ service cloud.firestore {
     // Messages collection
     match /messages/{messageId} {
       // Allow reading messages if user is a participant in the conversation
-      allow read: if isAuthenticated() && 
-        (resource.data.senderId == request.auth.uid || 
-         resource.data.receiverId == request.auth.uid);
+      allow read: if isAuthenticated() && (
+        request.auth.uid == resource.data.senderId ||
+        request.auth.uid == resource.data.receiverId
+      );
       // Allow creating messages
-      allow create: if isAuthenticated() && 
-        request.resource.data.senderId == request.auth.uid;
+      allow create: if isAuthenticated() && (
+        request.auth.uid == request.resource.data.senderId
+      );
       // Allow updating only the read status
-      allow update: if isAuthenticated() && 
-        (resource.data.senderId == request.auth.uid || 
-         resource.data.receiverId == request.auth.uid) && 
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+      allow update: if isAuthenticated() && (
+        request.auth.uid == resource.data.senderId ||
+        request.auth.uid == resource.data.receiverId
+      ) && (
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['read'])
+      );
+      // Allow deleting messages if user is a participant in the conversation
+      allow delete: if isAuthenticated() && (
+        request.auth.uid == resource.data.senderId ||
+        request.auth.uid == resource.data.receiverId
+      );
     }
 
     // Conversations collection
     match /conversations/{conversationId} {
       // Allow reading conversations if user is a participant
-      allow read: if isAuthenticated() && 
-        request.auth.uid in resource.data.participants;
+      allow read: if isAuthenticated() && (
+        request.auth.uid in resource.data.participants
+      );
       // Allow creating conversations
-      allow create: if isAuthenticated() && 
-        request.auth.uid in request.resource.data.participants;
-      // Allow updating only the lastMessage field
-      allow update: if isAuthenticated() && 
-        request.auth.uid in resource.data.participants && 
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessage']);
+      allow create: if isAuthenticated() && (
+        request.auth.uid in request.resource.data.participants
+      );
+      // Allow updating conversation data
+      allow update: if isAuthenticated() && (
+        request.auth.uid in resource.data.participants
+      );
+      // Allow deleting conversations
+      allow delete: if isAuthenticated() && (
+        request.auth.uid in resource.data.participants
+      );
     }
 
     // Affirmations collection
@@ -90,9 +112,34 @@ service cloud.firestore {
     // Prompt responses collection
     match /promptResponses/{responseId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() && 
+        request.auth.uid == request.resource.data.userId;
+      allow update: if isAuthenticated() && 
+        request.auth.uid == resource.data.userId;
+      allow delete: if isAuthenticated() && 
+        request.auth.uid == resource.data.userId;
+    }
+
+    // Personal affirmations collection
+    match /personalAffirmations/{affirmationId} {
+      // Allow reading all personal affirmations
+      allow read: if isAuthenticated();
+      
+      // Allow creating new affirmations
+      allow create: if isAuthenticated() && 
+        request.auth.uid == request.resource.data.userId &&
+        request.resource.data.keys().hasAll(['userId', 'content', 'createdAt', 'userData']) &&
+        request.resource.data.userData.keys().hasAll(['id', 'firstName', 'lastName', 'photoURL']);
+      
+      // Allow updating own affirmations
+      allow update: if isAuthenticated() && 
+        request.auth.uid == resource.data.userId &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['content', 'userData']);
+      
+      // Allow deleting own affirmations
+      allow delete: if isAuthenticated() && 
+        request.auth.uid == resource.data.userId;
     }
 
     // Default deny

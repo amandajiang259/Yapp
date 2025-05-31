@@ -79,74 +79,125 @@ export default function Messages() {
   useEffect(() => {
     if (!currentUser) return;
 
-    // Fetch conversations
-    const conversationsRef = collection(db, 'conversations');
-    const q = query(
-      conversationsRef,
-      where('participants', 'array-contains', currentUser.uid),
-      orderBy('lastMessage.createdAt', 'desc')
-    );
+    const fetchConversations = async () => {
+      try {
+        // Fetch conversations
+        const conversationsRef = collection(db, 'conversations');
+        const q = query(
+          conversationsRef,
+          where('participants', 'array-contains', currentUser.uid)
+        );
 
-    const unsubscribe = onSnapshot(q, async (snapshot) => {
-      const conversationsData: Conversation[] = [];
-      
-      for (const docSnapshot of snapshot.docs) {
-        const data = docSnapshot.data();
-        const otherUserId = data.participants.find((id: string) => id !== currentUser.uid);
-        
-        // Fetch other user's data
-        const userDocRef = doc(db, 'users', otherUserId);
-        const userDoc = await getDoc(userDocRef);
-        const otherUserData = userDoc.data() as User | undefined;
+        const unsubscribe = onSnapshot(q, async (snapshot) => {
+          try {
+            const conversationsData: Conversation[] = [];
+            
+            for (const docSnapshot of snapshot.docs) {
+              const data = docSnapshot.data();
+              const otherUserId = data.participants.find((id: string) => id !== currentUser.uid);
+              
+              // Fetch other user's data
+              const userDocRef = doc(db, 'users', otherUserId);
+              const userDoc = await getDoc(userDocRef);
+              const otherUserData = userDoc.data() as User | undefined;
 
-        conversationsData.push({
-          id: docSnapshot.id,
-          participants: data.participants,
-          lastMessage: data.lastMessage,
-          otherUser: {
-            id: otherUserId,
-            username: otherUserData?.username || 'Unknown',
-            photoURL: otherUserData?.photoURL || '/default-avatar.svg'
+              if (otherUserData) {
+                conversationsData.push({
+                  id: docSnapshot.id,
+                  participants: data.participants,
+                  lastMessage: data.lastMessage || {
+                    id: 'initial',
+                    text: 'Conversation started',
+                    senderId: currentUser.uid,
+                    receiverId: otherUserId,
+                    createdAt: data.createdAt || serverTimestamp(),
+                    senderName: userProfile?.username || 'Unknown',
+                    senderPhotoURL: userProfile?.photoURL || '/default-avatar.svg'
+                  },
+                  otherUser: {
+                    id: otherUserId,
+                    username: otherUserData.username || 'Unknown',
+                    photoURL: otherUserData.photoURL || '/default-avatar.svg'
+                  }
+                });
+              }
+            }
+
+            setConversations(conversationsData);
+            setIsLoading(false);
+          } catch (error) {
+            console.error('Error fetching conversations:', error);
+            setError('Unable to load conversations. Please try again.');
+            setIsLoading(false);
           }
+        }, (error) => {
+          console.error('Error in conversations snapshot:', error);
+          setError('Unable to load conversations. Please try again.');
+          setIsLoading(false);
         });
+
+        return unsubscribe;
+      } catch (error) {
+        console.error('Error setting up conversations listener:', error);
+        setError('Unable to load conversations. Please try again.');
+        setIsLoading(false);
+        return () => {};
       }
+    };
 
-      setConversations(conversationsData);
-      setIsLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, [currentUser]);
+    const unsubscribe = fetchConversations();
+    return () => {
+      unsubscribe.then(unsub => unsub());
+    };
+  }, [currentUser?.uid, userProfile?.username, userProfile?.photoURL]);
 
   useEffect(() => {
     if (!selectedConversation || !currentUser) return;
 
-    setError(null);
-    // Fetch messages for selected conversation
-    const messagesRef = collection(db, 'messages');
-    const q = query(
-      messagesRef,
-      where('conversationId', '==', selectedConversation.id),
-      orderBy('createdAt', 'asc')
-    );
+    const fetchMessages = async () => {
+      try {
+        setError(null);
+        // Fetch messages for selected conversation
+        const messagesRef = collection(db, 'messages');
+        const q = query(
+          messagesRef,
+          where('conversationId', '==', selectedConversation.id),
+          orderBy('createdAt', 'asc')
+        );
 
-    const unsubscribe = onSnapshot(q, 
-      (snapshot) => {
-        const messagesData = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as Message[];
-        setMessages(messagesData);
-        scrollToBottom();
-      },
-      (error) => {
-        console.error('Error fetching messages:', error);
+        const unsubscribe = onSnapshot(q, 
+          (snapshot) => {
+            try {
+              const messagesData = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+              })) as Message[];
+              setMessages(messagesData);
+              scrollToBottom();
+            } catch (error) {
+              console.error('Error processing messages:', error);
+              setError('Unable to load messages. Please try again.');
+            }
+          },
+          (error) => {
+            console.error('Error fetching messages:', error);
+            setError('Unable to load messages. Please try again.');
+          }
+        );
+
+        return unsubscribe;
+      } catch (error) {
+        console.error('Error setting up messages listener:', error);
         setError('Unable to load messages. Please try again.');
+        return () => {};
       }
-    );
+    };
 
-    return () => unsubscribe();
-  }, [selectedConversation, currentUser]);
+    const unsubscribe = fetchMessages();
+    return () => {
+      unsubscribe.then(unsub => unsub());
+    };
+  }, [selectedConversation?.id, currentUser?.uid]);
 
   const fetchUsers = async () => {
     if (!currentUser) return;
@@ -189,7 +240,7 @@ export default function Messages() {
   }, [searchTerm, currentUser]);
 
   const startNewConversation = async (selectedUser: User) => {
-    if (!currentUser) return;
+    if (!currentUser || !userProfile) return;
 
     try {
       // Check if conversation already exists
@@ -211,7 +262,15 @@ export default function Messages() {
         const conversation: Conversation = {
           id: existingConversation.id,
           participants: conversationData.participants,
-          lastMessage: conversationData.lastMessage,
+          lastMessage: conversationData.lastMessage || {
+            id: 'initial',
+            text: 'Conversation started',
+            senderId: currentUser.uid,
+            receiverId: selectedUser.id,
+            createdAt: serverTimestamp(),
+            senderName: userProfile.username,
+            senderPhotoURL: userProfile.photoURL || '/default-avatar.svg'
+          },
           otherUser: {
             id: selectedUser.id,
             username: selectedUser.username,
@@ -226,14 +285,15 @@ export default function Messages() {
       // Create new conversation
       const newConversation = await addDoc(conversationsRef, {
         participants: [currentUser.uid, selectedUser.id],
+        createdAt: serverTimestamp(),
         lastMessage: {
           id: 'initial',
           text: 'Conversation started',
           senderId: currentUser.uid,
           receiverId: selectedUser.id,
           createdAt: serverTimestamp(),
-          senderName: currentUser.displayName || 'Unknown',
-          senderPhotoURL: currentUser.photoURL || '/default-avatar.svg'
+          senderName: userProfile.username,
+          senderPhotoURL: userProfile.photoURL || '/default-avatar.svg'
         }
       });
 
@@ -247,8 +307,8 @@ export default function Messages() {
           senderId: currentUser.uid,
           receiverId: selectedUser.id,
           createdAt: serverTimestamp(),
-          senderName: currentUser.displayName || 'Unknown',
-          senderPhotoURL: currentUser.photoURL || '/default-avatar.svg'
+          senderName: userProfile.username,
+          senderPhotoURL: userProfile.photoURL || '/default-avatar.svg'
         },
         otherUser: {
           id: selectedUser.id,
@@ -261,6 +321,7 @@ export default function Messages() {
       setShowNewConversationModal(false);
     } catch (error) {
       console.error('Error starting new conversation:', error);
+      setError('Unable to start conversation. Please try again.');
     }
   };
 
@@ -308,11 +369,7 @@ export default function Messages() {
     if (!conversationToDelete || !currentUser) return;
 
     try {
-      // Delete the conversation document
-      const conversationRef = doc(db, 'conversations', conversationToDelete.id);
-      await deleteDoc(conversationRef);
-
-      // Delete all messages in the conversation
+      // Delete all messages in the conversation first
       const messagesRef = collection(db, 'messages');
       const q = query(messagesRef, where('conversationId', '==', conversationToDelete.id));
       const querySnapshot = await getDocs(q);
@@ -320,15 +377,24 @@ export default function Messages() {
       const deletePromises = querySnapshot.docs.map(doc => deleteDoc(doc.ref));
       await Promise.all(deletePromises);
 
+      // Then delete the conversation document
+      const conversationRef = doc(db, 'conversations', conversationToDelete.id);
+      await deleteDoc(conversationRef);
+
       // Update UI
       setConversations(prev => prev.filter(conv => conv.id !== conversationToDelete.id));
       if (selectedConversation?.id === conversationToDelete.id) {
         setSelectedConversation(null);
+        setMessages([]);
       }
       setShowDeleteModal(false);
       setConversationToDelete(null);
+      setError(null);
     } catch (error) {
       console.error('Error deleting conversation:', error);
+      setError('Unable to delete conversation. Please try again.');
+      setShowDeleteModal(false);
+      setConversationToDelete(null);
     }
   };
 

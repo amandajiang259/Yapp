@@ -27,53 +27,25 @@ interface PromptResponse {
   prompt: string;
 }
 
+interface PersonalAffirmation {
+  id: string;
+  userId: string;
+  content: string;
+  createdAt: any;
+  userData?: UserData;
+}
+
 export default function AffirmationsPage() {
   const router = useRouter();
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [currentUserData, setCurrentUserData] = useState<UserData | null>(null);
   const [responses, setResponses] = useState<PromptResponse[]>([]);
+  const [personalAffirmations, setPersonalAffirmations] = useState<PersonalAffirmation[]>([]);
   const [newResponse, setNewResponse] = useState('');
+  const [newAffirmation, setNewAffirmation] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentPrompt, setCurrentPrompt] = useState('');
-
-  const fetchAffirmations = async () => {
-    if (!currentUser) {
-      console.log('No authenticated user found');
-      return;
-    }
-
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-      const q = query(
-        collection(db, 'affirmations'),
-        where('userId', '==', currentUser.uid)
-      );
-      
-      const querySnapshot = await getDocs(q);
-      const affirmationsData: Affirmation[] = [];
-      
-      for (const docSnapshot of querySnapshot.docs) {
-        const data = docSnapshot.data();
-        affirmationsData.push({
-          id: docSnapshot.id,
-          userId: data.userId,
-          content: data.content,
-          createdAt: data.createdAt,
-          userData: data.userData
-        });
-      }
-      
-      setAffirmations(affirmationsData);
-    } catch (error: any) {
-      console.error('Error fetching affirmations:', error);
-      setError(error.message || 'Failed to fetch affirmations');
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (user) => {
@@ -92,8 +64,6 @@ export default function AffirmationsPage() {
             ...userDoc.data()
           } as UserData);
         }
-        // Only fetch affirmations after user data is loaded
-        await fetchAffirmations();
       } catch (error) {
         console.error('Error in auth state change:', error);
         setError('Failed to load user data');
@@ -184,6 +154,86 @@ export default function AffirmationsPage() {
     }
   };
 
+  const fetchPersonalAffirmations = async () => {
+    if (!currentUser) return;
+
+    setIsLoading(true);
+    try {
+      const q = query(
+        collection(db, 'personalAffirmations'),
+        orderBy('createdAt', 'desc')
+      );
+      const querySnapshot = await getDocs(q);
+      const affirmationsData: PersonalAffirmation[] = [];
+      
+      for (const docSnapshot of querySnapshot.docs) {
+        const data = docSnapshot.data();
+        const userDoc = await getDoc(doc(db, 'users', data.userId));
+        const userData = userDoc.exists() ? userDoc.data() as UserData : undefined;
+        
+        affirmationsData.push({
+          id: docSnapshot.id,
+          userId: data.userId,
+          content: data.content,
+          createdAt: data.createdAt,
+          userData: userData
+        });
+      }
+      
+      setPersonalAffirmations(affirmationsData);
+    } catch (error) {
+      console.error('Error fetching personal affirmations:', error);
+      setError('Failed to fetch personal affirmations');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const createPersonalAffirmation = async () => {
+    if (!currentUserData || !newAffirmation.trim()) return;
+
+    // Check if user has reached the limit of 5 affirmations
+    const userAffirmations = personalAffirmations.filter(a => a.userId === currentUserData.id);
+    if (userAffirmations.length >= 5) {
+      setError('You have reached the maximum limit of 5 personal affirmations');
+      return;
+    }
+
+    const newAffirmationData = {
+      userId: currentUserData.id,
+      content: newAffirmation,
+      createdAt: serverTimestamp(),
+      userData: currentUserData
+    };
+
+    try {
+      await addDoc(collection(db, 'personalAffirmations'), newAffirmationData);
+      setNewAffirmation('');
+      fetchPersonalAffirmations();
+    } catch (error) {
+      console.error('Error creating personal affirmation:', error);
+      setError('Failed to create personal affirmation');
+    }
+  };
+
+  const deletePersonalAffirmation = async (affirmationId: string) => {
+    if (!currentUser) return;
+
+    try {
+      await deleteDoc(doc(db, 'personalAffirmations', affirmationId));
+      setPersonalAffirmations(prev => prev.filter(aff => aff.id !== affirmationId));
+    } catch (error) {
+      console.error('Error deleting personal affirmation:', error);
+      setError('Failed to delete personal affirmation');
+    }
+  };
+
+  useEffect(() => {
+    if (currentUser) {
+      fetchPersonalAffirmations();
+    }
+  }, [currentUser]);
+
   return (
     <div className="min-h-screen bg-[#f6ebff]">
       {/* Navigation */}
@@ -231,74 +281,140 @@ export default function AffirmationsPage() {
       {/* Main content */}
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
-          {/* Weekly prompt */}
+          {/* Personal Affirmations Section */}
           <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-            <h2 className="text-xl font-semibold text-[#6c5ce7] mb-4">Weekly Prompt</h2>
-            <p className="text-gray-700 mb-4">{currentPrompt}</p>
-          </div>
-
-          {/* Response form */}
-          <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-            <h2 className="text-xl font-semibold text-[#6c5ce7] mb-4">Share Your Response</h2>
-            <textarea
-              value={newResponse}
-              onChange={(e) => setNewResponse(e.target.value)}
-              placeholder="Share your thoughts..."
-              className="w-full p-4 border rounded-md mb-4"
-              rows={4}
-            />
-            <button
-              onClick={createResponse}
-              disabled={!newResponse.trim()}
-              className="px-4 py-2 bg-[#6c5ce7] text-white rounded-md hover:bg-[#5a4dc7] transition-colors disabled:opacity-50"
-            >
-              Post Response
-            </button>
-          </div>
-
-          {/* Responses list */}
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-xl font-semibold text-[#6c5ce7] mb-4">Community Responses</h2>
-            {isLoading ? (
-              <p>Loading responses...</p>
-            ) : error ? (
-              <p className="text-red-500">{error}</p>
-            ) : responses.length === 0 ? (
-              <p>No responses yet. Be the first to share your thoughts!</p>
-            ) : (
-              <div className="space-y-4">
-                {responses.map((response) => (
-                  <div key={response.id} className="border rounded-lg p-4">
+            <h2 className="text-xl font-semibold text-[#6c5ce7] mb-4">Share Your Personal Affirmations</h2>
+            <p className="text-gray-600 mb-4">Share up to 5 of your personal affirmations with the community.</p>
+            <div className="mb-4">
+              <textarea
+                value={newAffirmation}
+                onChange={(e) => setNewAffirmation(e.target.value)}
+                placeholder="Write your personal affirmation..."
+                className="w-full p-4 border rounded-md mb-4"
+                rows={3}
+              />
+              <button
+                onClick={createPersonalAffirmation}
+                disabled={!newAffirmation.trim()}
+                className="px-4 py-2 bg-[#6c5ce7] text-white rounded-md hover:bg-[#5a4dc7] transition-colors disabled:opacity-50"
+              >
+                Share Affirmation
+              </button>
+            </div>
+            {error && <p className="text-red-500 mb-4">{error}</p>}
+            <div className="space-y-4">
+              {isLoading ? (
+                <p>Loading affirmations...</p>
+              ) : personalAffirmations.length === 0 ? (
+                <p>No affirmations shared yet. Be the first to share your affirmation!</p>
+              ) : (
+                personalAffirmations.map((affirmation) => (
+                  <div key={affirmation.id} className="border rounded-lg p-4">
                     <div className="flex justify-between items-start mb-2">
                       <div className="flex items-center space-x-3">
                         <Image
-                          src={response.userData?.photoURL || '/default-avatar.svg'}
+                          src={affirmation.userData?.photoURL || '/default-avatar.svg'}
                           alt="Profile"
                           width={40}
                           height={40}
                           className="rounded-full"
                         />
                         <span className="font-medium">
-                          {response.userData?.firstName} {response.userData?.lastName}
+                          {affirmation.userData?.firstName} {affirmation.userData?.lastName}
                         </span>
                       </div>
-                      {response.userId === currentUser?.uid && (
+                      {affirmation.userId === currentUser?.uid && (
                         <button
-                          onClick={() => deleteResponse(response.id)}
+                          onClick={() => deletePersonalAffirmation(affirmation.id)}
                           className="text-red-500 hover:text-red-700"
                         >
                           Delete
                         </button>
                       )}
                     </div>
-                    <p className="text-gray-700">{response.content}</p>
+                    <p className="text-gray-700">{affirmation.content}</p>
                     <p className="text-sm text-gray-500 mt-2">
-                      {response.createdAt?.toDate().toLocaleDateString()}
+                      {affirmation.createdAt?.toDate().toLocaleDateString()}
                     </p>
                   </div>
-                ))}
-              </div>
-            )}
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Weekly Discussion Section */}
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h2 className="text-xl font-semibold text-[#6c5ce7] mb-4">Weekly Discussion</h2>
+            
+            {/* Weekly prompt */}
+            <div className="mb-6">
+              <h3 className="text-lg font-medium text-[#6c5ce7] mb-2">This Week's Prompt</h3>
+              <p className="text-gray-700 mb-4">{currentPrompt}</p>
+            </div>
+
+            {/* Response form */}
+            <div className="mb-6">
+              <h3 className="text-lg font-medium text-[#6c5ce7] mb-2">Share Your Response</h3>
+              <textarea
+                value={newResponse}
+                onChange={(e) => setNewResponse(e.target.value)}
+                placeholder="Share your thoughts..."
+                className="w-full p-4 border rounded-md mb-4"
+                rows={4}
+              />
+              <button
+                onClick={createResponse}
+                disabled={!newResponse.trim()}
+                className="px-4 py-2 bg-[#6c5ce7] text-white rounded-md hover:bg-[#5a4dc7] transition-colors disabled:opacity-50"
+              >
+                Post Response
+              </button>
+            </div>
+
+            {/* Responses list */}
+            <div>
+              <h3 className="text-lg font-medium text-[#6c5ce7] mb-2">Community Responses</h3>
+              {isLoading ? (
+                <p>Loading responses...</p>
+              ) : error ? (
+                <p className="text-red-500">{error}</p>
+              ) : responses.length === 0 ? (
+                <p>No responses yet. Be the first to share your thoughts!</p>
+              ) : (
+                <div className="space-y-4">
+                  {responses.map((response) => (
+                    <div key={response.id} className="border rounded-lg p-4">
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="flex items-center space-x-3">
+                          <Image
+                            src={response.userData?.photoURL || '/default-avatar.svg'}
+                            alt="Profile"
+                            width={40}
+                            height={40}
+                            className="rounded-full"
+                          />
+                          <span className="font-medium">
+                            {response.userData?.firstName} {response.userData?.lastName}
+                          </span>
+                        </div>
+                        {response.userId === currentUser?.uid && (
+                          <button
+                            onClick={() => deleteResponse(response.id)}
+                            className="text-red-500 hover:text-red-700"
+                          >
+                            Delete
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-gray-700">{response.content}</p>
+                      <p className="text-sm text-gray-500 mt-2">
+                        {response.createdAt?.toDate().toLocaleDateString()}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </main>
