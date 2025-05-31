@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { auth } from '../authentication/firebase';
 import CreatePostButton from './CreatePostButton';
 
@@ -10,6 +11,17 @@ interface NavigationProps {
 }
 
 export default function Navigation({ firstName }: NavigationProps) {
+  const router = useRouter();
+
+  const handleLogout = async () => {
+    try {
+      await auth.signOut();
+      router.push("/");
+    } catch (error) {
+      console.error("Logout Error:", error);
+    }
+  };
+
   return (
     <nav className="bg-[#6c5ce7] shadow-lg">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -32,7 +44,7 @@ export default function Navigation({ firstName }: NavigationProps) {
                 Messages
               </Link>
               <Link href="/dashboard/affirmations" className="text-white hover:bg-[#ab9dd3] px-3 py-2 rounded-md text-sm font-medium transition-colors">
-                Affirmations
+                Weekly Discussion
               </Link>
               <Link href="/dashboard/profile" className="text-white hover:bg-[#ab9dd3] px-3 py-2 rounded-md text-sm font-medium transition-colors">
                 Profile
@@ -43,7 +55,7 @@ export default function Navigation({ firstName }: NavigationProps) {
           <div className="flex items-center space-x-4">
             <span className="text-white text-sm">Welcome, {firstName || 'User'}</span>
             <button
-              onClick={() => auth.signOut()}
+              onClick={handleLogout}
               className="px-4 py-2 bg-[#68baa5] text-white rounded-md hover:bg-[#5aa594] transition-colors font-medium"
             >
               Logout

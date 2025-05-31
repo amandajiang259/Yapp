@@ -2,21 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import { auth, db } from '../../authentication/firebase';
-import { collection, query, where, getDocs, doc, getDoc, addDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc, addDoc, serverTimestamp, deleteDoc, orderBy } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { v4 as uuidv4 } from 'uuid';
-import { WEEKLY_PROMPTS } from '../../constants/prompts';
-
-function generateWeeklyPrompt(): string {
-  const now = new Date();
-  const oneJan = new Date(now.getFullYear(), 0, 1);
-  const days = Math.floor((now.getTime() - oneJan.getTime()) / (1000 * 60 * 60 * 24));
-  const week = Math.ceil((days + oneJan.getDay() + 1) / 7);
-  const index = week % WEEKLY_PROMPTS.length;
-  return WEEKLY_PROMPTS[index];
-}
+import { generateWeeklyPrompt } from '../../utils/promptUtils';
 
 interface UserData {
   id: string;
@@ -27,20 +18,21 @@ interface UserData {
   bio?: string;
 }
 
-interface Affirmation {
+interface PromptResponse {
   id: string;
   userId: string;
   content: string;
   createdAt: any;
   userData?: UserData;
+  prompt: string;
 }
 
 export default function AffirmationsPage() {
   const router = useRouter();
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [currentUserData, setCurrentUserData] = useState<UserData | null>(null);
-  const [affirmations, setAffirmations] = useState<Affirmation[]>([]);
-  const [newAffirmation, setNewAffirmation] = useState('');
+  const [responses, setResponses] = useState<PromptResponse[]>([]);
+  const [newResponse, setNewResponse] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentPrompt, setCurrentPrompt] = useState('');
@@ -108,51 +100,87 @@ export default function AffirmationsPage() {
       }
     });
 
-    // Set the weekly prompt
+    // Set the weekly prompt using the shared function
     setCurrentPrompt(generateWeeklyPrompt());
 
     return () => unsubscribe();
   }, [router]);
 
-  const handleLogout = async () => {
+  useEffect(() => {
+    if (currentUser) {
+      fetchResponses();
+    }
+  }, [currentUser]);
+
+  useEffect(() => {
+    document.title = "Weekly Discussion | Yapp";
+  }, []);
+
+  const fetchResponses = async () => {
+    if (!currentUser) return;
+
+    setIsLoading(true);
     try {
-      await auth.signOut();
-      router.push('/');
+      const q = query(
+        collection(db, 'promptResponses'),
+        where('prompt', '==', currentPrompt),
+        orderBy('createdAt', 'desc')
+      );
+      const querySnapshot = await getDocs(q);
+      const responsesData: PromptResponse[] = [];
+      
+      for (const docSnapshot of querySnapshot.docs) {
+        const data = docSnapshot.data();
+        responsesData.push({
+          id: docSnapshot.id,
+          userId: data.userId,
+          content: data.content,
+          createdAt: data.createdAt,
+          userData: data.userData,
+          prompt: data.prompt
+        });
+      }
+      
+      setResponses(responsesData);
     } catch (error) {
-      console.error('Error logging out:', error);
+      console.error('Error fetching responses:', error);
+      setError('Failed to fetch responses');
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const createAffirmation = async (content: string) => {
-    if (!currentUserData) return;
+  const createResponse = async () => {
+    if (!currentUserData || !newResponse.trim()) return;
 
-    const newAffirmation: Affirmation = {
+    const newResponseData: PromptResponse = {
       id: uuidv4(),
       userId: currentUserData.id,
-      content: content,
+      content: newResponse,
       createdAt: serverTimestamp(),
-      userData: currentUserData
+      userData: currentUserData,
+      prompt: currentPrompt
     };
 
     try {
-      await addDoc(collection(db, 'affirmations'), newAffirmation);
-      setNewAffirmation('');
-      fetchAffirmations();
+      await addDoc(collection(db, 'promptResponses'), newResponseData);
+      setNewResponse('');
+      fetchResponses();
     } catch (error) {
-      console.error('Error creating affirmation:', error);
-      setError('Failed to create affirmation');
+      console.error('Error creating response:', error);
+      setError('Failed to create response');
     }
   };
 
-  const deleteAffirmation = async (affirmationId: string) => {
+  const deleteResponse = async (responseId: string) => {
     if (!currentUser) return;
 
     try {
-      await deleteDoc(doc(db, 'affirmations', affirmationId));
-      setAffirmations(prev => prev.filter(aff => aff.id !== affirmationId));
+      await deleteDoc(doc(db, 'promptResponses', responseId));
+      setResponses(prev => prev.filter(response => response.id !== responseId));
     } catch (error) {
-      console.error('Error deleting affirmation:', error);
-      setError('Failed to delete affirmation');
+      console.error('Error deleting response:', error);
+      setError('Failed to delete response');
     }
   };
 
@@ -180,7 +208,7 @@ export default function AffirmationsPage() {
                   Messages
                 </Link>
                 <Link href="/dashboard/affirmations" className="text-white hover:bg-[#ab9dd3] px-3 py-2 rounded-md text-sm font-medium transition-colors">
-                  Affirmations
+                  Weekly Discussion
                 </Link>
                 <Link href="/dashboard/profile" className="text-white hover:bg-[#ab9dd3] px-3 py-2 rounded-md text-sm font-medium transition-colors">
                   Profile
@@ -190,7 +218,7 @@ export default function AffirmationsPage() {
             <div className="flex items-center space-x-4">
               <span className="text-white text-sm">Welcome, {currentUserData?.firstName || 'User'}</span>
               <button
-                onClick={handleLogout}
+                onClick={() => auth.signOut()}
                 className="px-4 py-2 bg-[#68baa5] text-white rounded-md hover:bg-[#5aa594] transition-colors font-medium"
               >
                 Logout
@@ -207,72 +235,65 @@ export default function AffirmationsPage() {
           <div className="bg-white rounded-lg shadow-md p-6 mb-6">
             <h2 className="text-xl font-semibold text-[#6c5ce7] mb-4">Weekly Prompt</h2>
             <p className="text-gray-700 mb-4">{currentPrompt}</p>
-            <button
-              onClick={() => createAffirmation(currentPrompt)}
-              className="px-4 py-2 bg-[#6c5ce7] text-white rounded-md hover:bg-[#5a4dc7] transition-colors"
-            >
-              Respond to Prompt
-            </button>
           </div>
 
-          {/* Create new affirmation */}
+          {/* Response form */}
           <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-            <h2 className="text-xl font-semibold text-[#6c5ce7] mb-4">Create New Affirmation</h2>
+            <h2 className="text-xl font-semibold text-[#6c5ce7] mb-4">Share Your Response</h2>
             <textarea
-              value={newAffirmation}
-              onChange={(e) => setNewAffirmation(e.target.value)}
+              value={newResponse}
+              onChange={(e) => setNewResponse(e.target.value)}
               placeholder="Share your thoughts..."
               className="w-full p-4 border rounded-md mb-4"
               rows={4}
             />
             <button
-              onClick={() => createAffirmation(newAffirmation)}
-              disabled={!newAffirmation.trim()}
+              onClick={createResponse}
+              disabled={!newResponse.trim()}
               className="px-4 py-2 bg-[#6c5ce7] text-white rounded-md hover:bg-[#5a4dc7] transition-colors disabled:opacity-50"
             >
-              Post Affirmation
+              Post Response
             </button>
           </div>
 
-          {/* Affirmations list */}
+          {/* Responses list */}
           <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-xl font-semibold text-[#6c5ce7] mb-4">Your Affirmations</h2>
+            <h2 className="text-xl font-semibold text-[#6c5ce7] mb-4">Community Responses</h2>
             {isLoading ? (
-              <p>Loading affirmations...</p>
+              <p>Loading responses...</p>
             ) : error ? (
               <p className="text-red-500">{error}</p>
-            ) : affirmations.length === 0 ? (
-              <p>No affirmations yet. Start by creating one!</p>
+            ) : responses.length === 0 ? (
+              <p>No responses yet. Be the first to share your thoughts!</p>
             ) : (
               <div className="space-y-4">
-                {affirmations.map((affirmation) => (
-                  <div key={affirmation.id} className="border rounded-lg p-4">
+                {responses.map((response) => (
+                  <div key={response.id} className="border rounded-lg p-4">
                     <div className="flex justify-between items-start mb-2">
                       <div className="flex items-center space-x-3">
                         <Image
-                          src={affirmation.userData?.photoURL || '/default-avatar.svg'}
+                          src={response.userData?.photoURL || '/default-avatar.svg'}
                           alt="Profile"
                           width={40}
                           height={40}
                           className="rounded-full"
                         />
                         <span className="font-medium">
-                          {affirmation.userData?.firstName} {affirmation.userData?.lastName}
+                          {response.userData?.firstName} {response.userData?.lastName}
                         </span>
                       </div>
-                      <button
-                        onClick={() => deleteAffirmation(affirmation.id)}
-                        className="text-red-500 hover:text-red-700 transition-colors"
-                        title="Delete affirmation"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-                        </svg>
-                      </button>
+                      {response.userId === currentUser?.uid && (
+                        <button
+                          onClick={() => deleteResponse(response.id)}
+                          className="text-red-500 hover:text-red-700"
+                        >
+                          Delete
+                        </button>
+                      )}
                     </div>
-                    <p className="text-gray-700">{affirmation.content}</p>
+                    <p className="text-gray-700">{response.content}</p>
                     <p className="text-sm text-gray-500 mt-2">
-                      {affirmation.createdAt?.toDate().toLocaleDateString()}
+                      {response.createdAt?.toDate().toLocaleDateString()}
                     </p>
                   </div>
                 ))}
@@ -281,11 +302,6 @@ export default function AffirmationsPage() {
           </div>
         </div>
       </main>
-
-      {/* Bottom banner */}
-      <div className="fixed bottom-0 left-0 right-0 bg-[#6c5ce7] text-white p-4 text-center shadow-lg">
-        <p>Welcome to Yapp! Share your positive affirmations and creative stories!</p>
-      </div>
     </div>
   );
 }

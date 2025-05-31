@@ -1,4 +1,4 @@
-export const WEEKLY_PROMPTS = [
+export const REFLECTION_PROMPTS = [
   "What's something you're grateful for today?",
   "Share a moment that made you smile this week.",
   "What's a small victory you've achieved recently?",
@@ -8,7 +8,10 @@ export const WEEKLY_PROMPTS = [
   "What's a lesson you've learned recently?",
   "Describe a moment of peace you've experienced.",
   "What's something you love about yourself?",
-  "Share a goal you're working towards.",
+  "Share a goal you're working towards."
+];
+
+export const AFFIRMATION_PROMPTS = [
   "I am grateful for a new day. What was your favorite day of last week and why?",
   "I am grateful for a new week. Describe your favorite week so far?",
   "I am feeling healthy and strong today. What are your goals?",

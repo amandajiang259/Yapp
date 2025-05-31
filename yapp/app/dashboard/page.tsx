@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { User } from 'firebase/auth';
 import Link from 'next/link';
 import { doc, getDoc } from 'firebase/firestore';
+import { generateWeeklyPrompt } from '../utils/promptUtils';
 
 const AFFIRMATIONS = [
   "I am capable of achieving my goals.",
@@ -20,25 +21,6 @@ const AFFIRMATIONS = [
   "I am creating a life I love."
 ];
 
-const WEEKLY_PROMPTS = [
-  "What are you most grateful for this week?",
-  "Share a moment that made you smile recently.",
-  "What's something new you learned this week?",
-  "Describe a challenge you overcame.",
-  "What's a small victory you're proud of?",
-  "Share a positive change you've noticed in yourself.",
-  "What's something you're looking forward to?"
-];
-
-function generateWeeklyPrompt(): string {
-  const now = new Date();
-  const oneJan = new Date(now.getFullYear(), 0, 1);
-  const days = Math.floor((now.getTime() - oneJan.getTime()) / (1000 * 60 * 60 * 24));
-  const week = Math.ceil((days + oneJan.getDay() + 1) / 7);
-  const index = week % WEEKLY_PROMPTS.length;
-  return WEEKLY_PROMPTS[index];
-}
-
 export default function Dashboard() {
   const [user, setUser] = useState<User | null>(null);
   const [firstName, setFirstName] = useState<string>('');
@@ -48,8 +30,7 @@ export default function Dashboard() {
   const [posts, setPosts] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showAffirmation, setShowAffirmation] = useState(true);
-  const [dailyAffirmation, setDailyAffirmation] = useState('');
-  const [weeklyPrompt, setWeeklyPrompt] = useState<string>('');
+  const [currentPrompt, setCurrentPrompt] = useState('');
 
   useEffect(() => {
     document.title = "Dashboard | Yapp";
@@ -80,9 +61,7 @@ export default function Dashboard() {
     });
 
     // Set daily affirmation and weekly prompt
-    const randomIndex = Math.floor(Math.random() * AFFIRMATIONS.length);
-    setDailyAffirmation(AFFIRMATIONS[randomIndex]);
-    setWeeklyPrompt(generateWeeklyPrompt());
+    setCurrentPrompt(generateWeeklyPrompt());
 
     return () => {
       unsubscribe();
@@ -134,7 +113,7 @@ export default function Dashboard() {
                   Messages
                 </Link>
                 <Link href="/dashboard/affirmations" className="text-white hover:bg-[#ab9dd3] px-3 py-2 rounded-md text-sm font-medium transition-colors">
-                  Affirmations
+                  Weekly Discussion
                 </Link>
                 <Link href="/dashboard/profile" className="text-white hover:bg-[#ab9dd3] px-3 py-2 rounded-md text-sm font-medium transition-colors">
                   Profile
@@ -163,7 +142,7 @@ export default function Dashboard() {
               <div className="flex items-center justify-between">
                 <div className="flex-1">
                   <h3 className="text-lg font-semibold mb-2">Today's Affirmation</h3>
-                  <p className="text-xl italic">{dailyAffirmation}</p>
+                  <p className="text-xl italic">{AFFIRMATIONS[Math.floor(Math.random() * AFFIRMATIONS.length)]}</p>
                 </div>
                 <button
                   onClick={() => setShowAffirmation(false)}
@@ -184,7 +163,7 @@ export default function Dashboard() {
               <div className="flex justify-between items-center">
                 <div>
                   <h3 className="text-[#6c5ce7] font-semibold mb-2">This Week's Prompt</h3>
-                  <p className="text-gray-800 italic">{weeklyPrompt}</p>
+                  <p className="text-gray-800 italic">{currentPrompt}</p>
                 </div>
                 <Link href="/dashboard/affirmations">
                   <button className="bg-[#68baa5] text-white px-4 py-2 rounded-md hover:bg-[#5aa594] transition-colors">

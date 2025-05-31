@@ -62,7 +62,7 @@ export default function SearchPage() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [searchType, setSearchType] = useState<'users' | 'posts'>('posts');
+  const [searchType, setSearchType] = useState<'users' | 'posts'>('users');
   const [searchResults, setSearchResults] = useState<(Post | AppUser)[]>([]);
   const [userProfiles, setUserProfiles] = useState<Record<string, UserProfile>>({});
   const [isLoading, setIsLoading] = useState(false);
@@ -237,6 +237,10 @@ export default function SearchPage() {
     setSearchQuery(tag);
   };
 
+  useEffect(() => {
+    document.title = "Search | Yapp";
+  }, []);
+
   if (!currentUser) {
     return null;
   }
@@ -265,7 +269,7 @@ export default function SearchPage() {
                   Messages
                 </Link>
                 <Link href="/dashboard/affirmations" className="text-white hover:bg-[#ab9dd3] px-3 py-2 rounded-md text-sm font-medium transition-colors">
-                  Affirmations
+                  Weekly Discussion
                 </Link>
                 <Link href="/dashboard/profile" className="text-white hover:bg-[#ab9dd3] px-3 py-2 rounded-md text-sm font-medium transition-colors">
                   Profile
