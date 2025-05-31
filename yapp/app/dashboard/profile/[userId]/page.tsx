@@ -58,6 +58,11 @@ export default function UserProfile() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [showFollowers, setShowFollowers] = useState(false);
+  const [showFollowing, setShowFollowing] = useState(false);
+  const [followersList, setFollowersList] = useState<UserData[]>([]);
+  const [followingList, setFollowingList] = useState<UserData[]>([]);
+  const [isFollowing, setIsFollowing] = useState(false);
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (user) => {
@@ -326,6 +331,9 @@ export default function UserProfile() {
                   className="rounded-full object-cover"
               />
             </div>
+            <div className="flex-1">
+              <h1 className="text-2xl font-bold text-[#6c5ce7]">{user.firstName} {user.lastName}</h1>
+              <p className="text-gray-600">@{user.username}</p>
               <p className="text-gray-600 mt-2">{user.bio || 'No bio available'}</p>
               <div className="flex space-x-4 mt-2">
                 <button
