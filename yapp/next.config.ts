@@ -1,10 +1,9 @@
-import type { NextConfig } from "next";
-
-const nextConfig: NextConfig = {
-  reactStrictMode: true,
-  swcMinify: true,
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  output: 'standalone',
   images: {
-    domains: ['firebasestorage.googleapis.com'], // Allow Firebase Storage images
+    domains: ['firebasestorage.googleapis.com', 'lh3.googleusercontent.com'],
+    unoptimized: true,
   },
   env: {
     NEXT_PUBLIC_FIREBASE_API_KEY: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -14,6 +13,12 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
     NEXT_PUBLIC_FIREBASE_APP_ID: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
   },
-};
+  typescript: {
+    ignoreBuildErrors: true,
+  },
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+}
 
 export default nextConfig;

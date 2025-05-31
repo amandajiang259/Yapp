@@ -31,10 +31,26 @@ service cloud.firestore {
     match /posts/{postId} {
       // Allow reading any post
       allow read: if isAuthenticated();
-      // Allow users to create their own posts
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      // Allow users to update/delete their own posts
-      allow update, delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      
+      // Allow creating new posts
+      allow create: if isAuthenticated() && 
+        request.auth.uid == request.resource.data.userId &&
+        request.resource.data.keys().hasAll(['userId', 'content', 'createdAt', 'type']) &&
+        (
+          request.resource.data.type == 'story' ||
+          request.resource.data.type == 'image' ||
+          request.resource.data.type == 'video'
+        );
+      
+      // Allow updating own posts
+      allow update: if isAuthenticated() && 
+        request.auth.uid == resource.data.userId &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['content', 'tags', 'formattedContent']);
+      
+      // Allow deleting own posts
+      allow delete: if isAuthenticated() && 
+        request.auth.uid == resource.data.userId;
     }
 
     // Followers collection
