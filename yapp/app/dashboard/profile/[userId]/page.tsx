@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { auth, db } from '../../../authentication/firebase';
+import { auth, db } from '../../../../firebase';
 import { doc, getDoc, collection, query, where, getDocs, orderBy, updateDoc } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 import { useIsFollowing } from '@/hooks/useIsFollowing';

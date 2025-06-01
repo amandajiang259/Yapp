@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { auth } from '../authentication/firebase';
+import { auth } from '../../firebase';
 import CreatePostButton from './CreatePostButton';
 
 interface NavigationProps {
