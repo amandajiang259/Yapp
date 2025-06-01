@@ -44,11 +44,3 @@ export async function fileExists(filename: string): Promise<boolean> {
 
   return !!count;
 }
-
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const provider = new GoogleAuthProvider();
-
-const db = getFirestore(app);
-
-export { auth, provider, signInWithPopup, signOut, db };
