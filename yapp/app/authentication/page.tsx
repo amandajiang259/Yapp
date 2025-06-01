@@ -1,13 +1,15 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { auth, provider, signInWithPopup, signOut } from "./firebase";
+import { auth } from "../../lib/firebase";
+import { GoogleAuthProvider, signInWithPopup, signOut } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 
 export default function LoginPage() {
   const [user, setUser] = useState<any>(null);
   const router = useRouter();
+  const provider = new GoogleAuthProvider();
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((user) => {

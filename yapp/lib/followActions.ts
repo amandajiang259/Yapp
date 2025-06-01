@@ -7,7 +7,7 @@ import {
     DocumentReference,
     WithFieldValue,
 } from 'firebase/firestore';
-import { db, auth } from '../firebase';
+import { db, auth } from './firebase';
 
 export const followUser = async (targetUid: string): Promise<void> => {
     const currentUid = auth.currentUser?.uid;
