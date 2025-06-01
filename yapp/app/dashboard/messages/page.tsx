@@ -152,52 +152,69 @@ export default function Messages() {
   }, [currentUser?.uid, userProfile?.username, userProfile?.photoURL]);
 
   useEffect(() => {
-    if (!selectedConversation || !currentUser) return;
+    if (!selectedConversation?.id || !currentUser?.uid) {
+      console.log('No conversation selected or user not logged in');
+      return;
+    }
+    console.log('Fetching messages for conversation:', selectedConversation.id, 'as user:', currentUser.uid);
+    setError(null); // Clear previous errors
+    setIsLoading(true); // Start loading now that we have confirmed IDs
 
-    const fetchMessages = async () => {
-      try {
-        setError(null);
-        // Fetch messages for selected conversation
-        const messagesRef = collection(db, 'messages');
-        const q = query(
-          messagesRef,
-          where('conversationId', '==', selectedConversation.id),
-          orderBy('createdAt', 'asc')
-        );
-
-        const unsubscribe = onSnapshot(q, 
-          (snapshot) => {
-            try {
-              const messagesData = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-              })) as Message[];
-              setMessages(messagesData);
-              scrollToBottom();
-            } catch (error) {
-              console.error('Error processing messages:', error);
-              setError('Unable to load messages. Please try again.');
-            }
-          },
-          (error) => {
-            console.error('Error fetching messages:', error);
-            setError('Unable to load messages. Please try again.');
-          }
-        );
-
-        return unsubscribe;
-      } catch (error) {
-        console.error('Error setting up messages listener:', error);
-        setError('Unable to load messages. Please try again.');
-        return () => {};
-      }
+    // Helper to merge and sort messages
+    const mergeAndSortMessages = (msgs1: Message[], msgs2: Message[]): Message[] => {
+      const all = [...msgs1, ...msgs2];
+      const unique = Array.from(new Map(all.map(m => [m.id, m])).values());
+      return unique.sort((a, b) => {
+        if (!a.createdAt || !b.createdAt) return 0;
+        return a.createdAt.seconds - b.createdAt.seconds;
+      });
     };
 
-    const unsubscribe = fetchMessages();
+    const messagesRef = collection(db, 'messages');
+    // We've confirmed selectedConversation.id and currentUser.uid are defined strings here
+    const q1 = query(
+      messagesRef,
+      where('conversationId', '==', selectedConversation.id),
+      where('senderId', '==', currentUser.uid),
+      orderBy('createdAt', 'asc')
+    );
+    const q2 = query(
+      messagesRef,
+      where('conversationId', '==', selectedConversation.id),
+      where('receiverId', '==', currentUser.uid),
+      orderBy('createdAt', 'asc')
+    );
+
+    let unsub1: (() => void) | undefined, unsub2: (() => void) | undefined;
+    let msgs1: Message[] = [], msgs2: Message[] = [];
+
+    unsub1 = onSnapshot(q1, (snapshot) => {
+      console.log('Sender query snapshot:', snapshot.docs.map(doc => doc.data()));
+      msgs1 = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Message));
+      setMessages(mergeAndSortMessages(msgs1, msgs2));
+      setIsLoading(false); // Always set loading to false after first snapshot
+    }, (error) => {
+      console.error('Error fetching messages (sender query):', error);
+      setError('Unable to load messages. Please check permissions or network.');
+      setIsLoading(false);
+    });
+
+    unsub2 = onSnapshot(q2, (snapshot) => {
+      console.log('Receiver query snapshot:', snapshot.docs.map(doc => doc.data()));
+      msgs2 = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Message));
+      setMessages(mergeAndSortMessages(msgs1, msgs2));
+      setIsLoading(false); // Always set loading to false after first snapshot
+    }, (error) => {
+      console.error('Error fetching messages (receiver query):', error);
+      setError('Unable to load messages. Please check permissions or network.');
+      setIsLoading(false);
+    });
+
     return () => {
-      unsubscribe.then(unsub => unsub());
+      unsub1 && unsub1();
+      unsub2 && unsub2();
     };
-  }, [selectedConversation?.id, currentUser?.uid]);
+  }, [selectedConversation?.id, currentUser?.uid]); // Dependencies are correct
 
   const fetchUsers = async () => {
     if (!currentUser) return;
@@ -369,16 +386,48 @@ export default function Messages() {
     if (!conversationToDelete || !currentUser) return;
 
     try {
-      // Delete all messages in the conversation first
-      const messagesRef = collection(db, 'messages');
-      const q = query(messagesRef, where('conversationId', '==', conversationToDelete.id));
-      const querySnapshot = await getDocs(q);
-      
-      const deletePromises = querySnapshot.docs.map(doc => deleteDoc(doc.ref));
-      await Promise.all(deletePromises);
-
-      // Then delete the conversation document
+      // First verify the conversation exists and user has access
       const conversationRef = doc(db, 'conversations', conversationToDelete.id);
+      const conversationDoc = await getDoc(conversationRef);
+      
+      if (!conversationDoc.exists()) {
+        throw new Error('Conversation not found');
+      }
+
+      const conversationData = conversationDoc.data();
+      if (!conversationData.participants.includes(currentUser.uid)) {
+        throw new Error('You do not have permission to delete this conversation');
+      }
+
+      // Delete all messages in the conversation where user is either sender or receiver
+      const messagesRef = collection(db, 'messages');
+      const q = query(
+        messagesRef,
+        where('conversationId', '==', conversationToDelete.id),
+        where('senderId', '==', currentUser.uid)
+      );
+      const q2 = query(
+        messagesRef,
+        where('conversationId', '==', conversationToDelete.id),
+        where('receiverId', '==', currentUser.uid)
+      );
+
+      const [sentMessages, receivedMessages] = await Promise.all([
+        getDocs(q),
+        getDocs(q2)
+      ]);
+      
+      // Delete messages in batches to avoid overwhelming Firestore
+      const batchSize = 500;
+      const allMessages = [...sentMessages.docs, ...receivedMessages.docs];
+      
+      for (let i = 0; i < allMessages.length; i += batchSize) {
+        const batch = allMessages.slice(i, i + batchSize);
+        const deletePromises = batch.map(doc => deleteDoc(doc.ref));
+        await Promise.all(deletePromises);
+      }
+
+      // Finally delete the conversation document
       await deleteDoc(conversationRef);
 
       // Update UI
@@ -390,9 +439,9 @@ export default function Messages() {
       setShowDeleteModal(false);
       setConversationToDelete(null);
       setError(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting conversation:', error);
-      setError('Unable to delete conversation. Please try again.');
+      setError(error.message || 'Unable to delete conversation. Please try again.');
       setShowDeleteModal(false);
       setConversationToDelete(null);
     }
@@ -418,7 +467,7 @@ export default function Messages() {
     return null;
   }
 
-  if (isLoading) {
+  if (isLoading && !selectedConversation) {
     return (
       <div className="min-h-screen bg-[#f6ebff] p-4">
         <div className="max-w-4xl mx-auto">
@@ -429,6 +478,8 @@ export default function Messages() {
       </div>
     );
   }
+
+  console.log('Rendering messages:', messages);
 
   return (
     <div className="min-h-screen bg-[#f6ebff]">
@@ -564,35 +615,41 @@ export default function Messages() {
                   {/* Messages */}
                   <div className="flex-1 overflow-y-auto p-4 space-y-4">
                     {error ? (
-                      <div className="text-center text-red-500 p-4">
-                        {error}
+                      <div className="text-center text-red-500 p-4">{error}</div>
+                    ) : isLoading ? (
+                      <div className="flex justify-center items-center h-32">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#6c5ce7]"></div>
                       </div>
                     ) : messages.length === 0 ? (
-                      <div className="text-center text-gray-500 p-4">
-                        No messages yet. Start the conversation!
-                      </div>
+                      <div className="text-center text-gray-500 p-4">No messages yet. Start the conversation!</div>
                     ) : (
-                      messages.map((message: Message) => (
-                        <div
-                          key={message.id}
-                          className={`flex ${
-                            message.senderId === currentUser?.uid ? 'justify-end' : 'justify-start'
-                          }`}
-                        >
+                      messages.map((message: Message) => {
+                        const isCurrentUser = message.senderId === currentUser.uid;
+                        return (
                           <div
-                            className={`max-w-[70%] rounded-lg p-3 ${
-                              message.senderId === currentUser?.uid
-                                ? 'bg-[#6c5ce7] text-white'
-                                : 'bg-gray-100 text-gray-800'
-                            }`}
+                            key={message.id}
+                            className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'}`}
                           >
-                            <p>{message.text}</p>
-                            <p className="text-xs mt-1 opacity-70">
-                              {formatMessageTime(message.createdAt)}
-                            </p>
+                            <div
+                              className={`max-w-[70%] rounded-lg p-3 mb-2 shadow-md ${
+                                isCurrentUser
+                                  ? 'bg-[#6c5ce7] text-white rounded-br-none'
+                                  : 'bg-gray-200 text-gray-800 rounded-bl-none'
+                              }`}
+                            >
+                              <div className="flex items-center mb-1">
+                                <span className="font-semibold text-xs mr-2">
+                                  {isCurrentUser ? 'You' : (message.senderName || 'Other')}
+                                </span>
+                                <span className="text-xs text-gray-400">
+                                  {formatMessageTime(message.createdAt)}
+                                </span>
+                              </div>
+                              <div className="break-words whitespace-pre-line">{message.text}</div>
+                            </div>
                           </div>
-                        </div>
-                      ))
+                        );
+                      })
                     )}
                     <div ref={messagesEndRef} />
                   </div>
