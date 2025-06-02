@@ -1,6 +1,6 @@
 # Yapp - Social Wellness Web App
 
-Yapp is built with Next.js and TypeScript on the client side, styled using Tailwind CSS. Firebase handles user authentication and serves as the main database. Most of the project is organized in the Yapp folder, and environment variables are securely stored outside version control.
+Yapp is built with Next.js and TypeScript on the client side, styled using Tailwind CSS. Cloud Firestore handles user authentication and serves as the main database. Most of the project is organized in the Yapp folder, and environment variables are securely stored outside version control.
 
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
