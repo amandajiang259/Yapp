@@ -208,8 +208,12 @@ export default function UserProfile() {
           const updatedFollowers = (userData.followers || []).filter((id: string) => id !== currentUserData.id);
           const updatedFollowing = (currentUserData.following || []).filter((id: string) => id !== user.id);
           
-          transaction.update(userRef, { followers: updatedFollowers });
-          transaction.update(currentUserRef, { following: updatedFollowing });
+          transaction.update(userRef, { 
+            followers: updatedFollowers || [] 
+          });
+          transaction.update(currentUserRef, { 
+            following: updatedFollowing || [] 
+          });
           setIsFollowing(false);
         } else {
           // Follow - Check if already following to prevent duplicates
@@ -218,8 +222,12 @@ export default function UserProfile() {
             const updatedFollowers = [...new Set([...(userData.followers || []), currentUserData.id])];
             const updatedFollowing = [...new Set([...(currentUserData.following || []), user.id])];
             
-            transaction.update(userRef, { followers: updatedFollowers });
-            transaction.update(currentUserRef, { following: updatedFollowing });
+            transaction.update(userRef, { 
+              followers: updatedFollowers || [] 
+            });
+            transaction.update(currentUserRef, { 
+              following: updatedFollowing || [] 
+            });
             setIsFollowing(true);
           }
         }
