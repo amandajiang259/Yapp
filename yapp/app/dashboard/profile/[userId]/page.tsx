@@ -200,33 +200,39 @@ export default function UserProfile() {
           throw new Error('User documents not found');
         }
 
-        const userData = userDoc.data();
-        const currentUserData = currentUserDoc.data();
+        const userData = userDoc.data() as UserData;
+        const currentUserData = currentUserDoc.data() as UserData;
         
         if (isFollowing) {
           // Unfollow
-          const updatedFollowers = (userData.followers || []).filter((id: string) => id !== currentUserData.id);
-          const updatedFollowing = (currentUserData.following || []).filter((id: string) => id !== user.id);
+          const currentFollowers = Array.isArray(userData.followers) ? userData.followers : [];
+          const currentFollowing = Array.isArray(currentUserData.following) ? currentUserData.following : [];
+          
+          const updatedFollowers = currentFollowers.filter((id: string) => id !== currentUserData.id);
+          const updatedFollowing = currentFollowing.filter((id: string) => id !== user.id);
           
           transaction.update(userRef, { 
-            followers: updatedFollowers || [] 
+            followers: updatedFollowers
           });
           transaction.update(currentUserRef, { 
-            following: updatedFollowing || [] 
+            following: updatedFollowing
           });
           setIsFollowing(false);
         } else {
           // Follow - Check if already following to prevent duplicates
-          const isAlreadyFollowing = (currentUserData.following || []).includes(user.id);
+          const currentFollowers = Array.isArray(userData.followers) ? userData.followers : [];
+          const currentFollowing = Array.isArray(currentUserData.following) ? currentUserData.following : [];
+          
+          const isAlreadyFollowing = currentFollowing.includes(user.id);
           if (!isAlreadyFollowing) {
-            const updatedFollowers = [...new Set([...(userData.followers || []), currentUserData.id])];
-            const updatedFollowing = [...new Set([...(currentUserData.following || []), user.id])];
+            const updatedFollowers = [...new Set([...currentFollowers, currentUserData.id])];
+            const updatedFollowing = [...new Set([...currentFollowing, user.id])];
             
             transaction.update(userRef, { 
-              followers: updatedFollowers || [] 
+              followers: updatedFollowers
             });
             transaction.update(currentUserRef, { 
-              following: updatedFollowing || [] 
+              following: updatedFollowing
             });
             setIsFollowing(true);
           }
