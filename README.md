@@ -9,6 +9,8 @@ Yapp is a full-stack social media web application designed to foster a safe, upl
 
 Users can post personal stories, reflect on their experiences, and engage with content aligned with their values. With features like customizable profiles, post discovery, and real-time messaging, Yapp offers a fun, relaxing, and reflective space where users can build genuine relationships and inspire one another.
 
+Website: https://yapp-git-main-yangyingjiang-ufledus-projects.vercel.app/
+
 How to Use for New Users:
 1) Create an Account
 2) Enter your personal information and customize your profile
