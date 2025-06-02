@@ -1,7 +1,6 @@
-# SWE_Semester_Project
-Semester project for CEN3031:
+# Yapp - Social Wellness Web App
 
-Tools / platforms used include: MongoDB for media storage, FireBase as user authentication and database, Next.js for functionality for server and Typescript for client  with TailWind CSS
+Tools / platforms used include: FireBase as user authentication and database, Next.js for functionality for server and Typescript for client with TailWind CSS
 Our project features the Yapp folder, which contains most of our work
 Env file is excluded for safety and security
 
