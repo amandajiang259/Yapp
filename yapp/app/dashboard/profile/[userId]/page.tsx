@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { auth, db } from '../../../../lib/firebase';
-import { doc, getDoc, collection, query, where, getDocs, orderBy, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, orderBy, updateDoc, runTransaction } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 import { useIsFollowing } from '@/hooks/useIsFollowing';
 import { followUser, unfollowUser } from '@/lib/followActions';
@@ -191,34 +191,39 @@ export default function UserProfile() {
       const userRef = doc(db, 'users', user.id);
       const currentUserRef = doc(db, 'users', currentUserData.id);
       
-      if (isFollowing) {
-        // Unfollow
-        const updatedFollowers = (user.followers || []).filter(id => id !== currentUserData.id);
-        const updatedFollowing = (currentUserData.following || []).filter(id => id !== user.id);
+      // Use a transaction to ensure both updates succeed or fail together
+      await runTransaction(db, async (transaction) => {
+        const userDoc = await transaction.get(userRef);
+        const currentUserDoc = await transaction.get(currentUserRef);
         
-        await updateDoc(userRef, {
-          followers: updatedFollowers
-        });
-        await updateDoc(currentUserRef, {
-          following: updatedFollowing
-        });
-        setIsFollowing(false);
-      } else {
-        // Follow - Check if already following to prevent duplicates
-        const isAlreadyFollowing = (currentUserData.following || []).includes(user.id);
-        if (!isAlreadyFollowing) {
-          const updatedFollowers = [...new Set([...(user.followers || []), currentUserData.id])];
-          const updatedFollowing = [...new Set([...(currentUserData.following || []), user.id])];
-          
-          await updateDoc(userRef, {
-            followers: updatedFollowers
-          });
-          await updateDoc(currentUserRef, {
-            following: updatedFollowing
-          });
-          setIsFollowing(true);
+        if (!userDoc.exists() || !currentUserDoc.exists()) {
+          throw new Error('User documents not found');
         }
-      }
+
+        const userData = userDoc.data();
+        const currentUserData = currentUserDoc.data();
+        
+        if (isFollowing) {
+          // Unfollow
+          const updatedFollowers = (userData.followers || []).filter((id: string) => id !== currentUserData.id);
+          const updatedFollowing = (currentUserData.following || []).filter((id: string) => id !== user.id);
+          
+          transaction.update(userRef, { followers: updatedFollowers });
+          transaction.update(currentUserRef, { following: updatedFollowing });
+          setIsFollowing(false);
+        } else {
+          // Follow - Check if already following to prevent duplicates
+          const isAlreadyFollowing = (currentUserData.following || []).includes(user.id);
+          if (!isAlreadyFollowing) {
+            const updatedFollowers = [...new Set([...(userData.followers || []), currentUserData.id])];
+            const updatedFollowing = [...new Set([...(currentUserData.following || []), user.id])];
+            
+            transaction.update(userRef, { followers: updatedFollowers });
+            transaction.update(currentUserRef, { following: updatedFollowing });
+            setIsFollowing(true);
+          }
+        }
+      });
 
       // Refresh user data
       const updatedUserDoc = await getDoc(userRef);
@@ -237,9 +242,9 @@ export default function UserProfile() {
           ...updatedCurrentUserDoc.data()
         } as UserData);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating follow status:', error);
-      setError('Failed to update follow status');
+      setError(error.message || 'Failed to update follow status');
     }
   };
 
