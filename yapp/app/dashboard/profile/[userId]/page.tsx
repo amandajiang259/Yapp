@@ -39,6 +39,13 @@ interface Post {
   formattedContent?: string;
 }
 
+// Utility to remove undefined fields from an object
+function removeUndefinedFields<T extends object>(obj: T): T {
+  return Object.fromEntries(
+    Object.entries(obj).filter(([_, v]) => v !== undefined)
+  ) as T;
+}
+
 export default function UserProfile() {
   const params = useParams();
   const userId = params.userId as string;
@@ -190,50 +197,43 @@ export default function UserProfile() {
     try {
       const userRef = doc(db, 'users', user.id);
       const currentUserRef = doc(db, 'users', currentUserData.id);
-      
-      // Use a transaction to ensure both updates succeed or fail together
+
       await runTransaction(db, async (transaction) => {
         const userDoc = await transaction.get(userRef);
         const currentUserDoc = await transaction.get(currentUserRef);
-        
+
         if (!userDoc.exists() || !currentUserDoc.exists()) {
           throw new Error('User documents not found');
         }
 
         const userData = userDoc.data() as UserData;
-        const currentUserData = currentUserDoc.data() as UserData;
-        
+        const currentUserDataTx = currentUserDoc.data() as UserData;
+
+        // Ensure arrays are valid and contain only strings
+        const currentFollowers = Array.isArray(userData.followers)
+          ? userData.followers.filter((id): id is string => typeof id === 'string')
+          : [];
+        const currentFollowing = Array.isArray(currentUserDataTx.following)
+          ? currentUserDataTx.following.filter((id): id is string => typeof id === 'string')
+          : [];
+
         if (isFollowing) {
           // Unfollow
-          const currentFollowers = Array.isArray(userData.followers) ? userData.followers : [];
-          const currentFollowing = Array.isArray(currentUserData.following) ? currentUserData.following : [];
-          
-          const updatedFollowers = currentFollowers.filter((id: string) => id !== currentUserData.id);
-          const updatedFollowing = currentFollowing.filter((id: string) => id !== user.id);
-          
-          transaction.update(userRef, { 
-            followers: updatedFollowers
-          });
-          transaction.update(currentUserRef, { 
-            following: updatedFollowing
-          });
+          const updatedFollowers = currentFollowers.filter((id) => id !== currentUserData.id);
+          const updatedFollowing = currentFollowing.filter((id) => id !== user.id);
+
+          transaction.update(userRef, { followers: updatedFollowers });
+          transaction.update(currentUserRef, { following: updatedFollowing });
           setIsFollowing(false);
         } else {
-          // Follow - Check if already following to prevent duplicates
-          const currentFollowers = Array.isArray(userData.followers) ? userData.followers : [];
-          const currentFollowing = Array.isArray(currentUserData.following) ? currentUserData.following : [];
-          
+          // Follow
           const isAlreadyFollowing = currentFollowing.includes(user.id);
           if (!isAlreadyFollowing) {
             const updatedFollowers = [...new Set([...currentFollowers, currentUserData.id])];
             const updatedFollowing = [...new Set([...currentFollowing, user.id])];
-            
-            transaction.update(userRef, { 
-              followers: updatedFollowers
-            });
-            transaction.update(currentUserRef, { 
-              following: updatedFollowing
-            });
+
+            transaction.update(userRef, { followers: updatedFollowers });
+            transaction.update(currentUserRef, { following: updatedFollowing });
             setIsFollowing(true);
           }
         }
@@ -242,19 +242,19 @@ export default function UserProfile() {
       // Refresh user data
       const updatedUserDoc = await getDoc(userRef);
       if (updatedUserDoc.exists()) {
-        setUser({
+        setUser(removeUndefinedFields({
           id: updatedUserDoc.id,
           ...updatedUserDoc.data()
-        } as UserData);
+        }) as UserData);
       }
 
       // Refresh current user data
       const updatedCurrentUserDoc = await getDoc(currentUserRef);
       if (updatedCurrentUserDoc.exists()) {
-        setCurrentUserData({
+        setCurrentUserData(removeUndefinedFields({
           id: updatedCurrentUserDoc.id,
           ...updatedCurrentUserDoc.data()
-        } as UserData);
+        }) as UserData);
       }
     } catch (error: any) {
       console.error('Error updating follow status:', error);

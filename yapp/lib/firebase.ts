@@ -45,13 +45,18 @@ const handleFollow = async () => {
       const userData = userDoc.data() as UserData;
       const currentUserDataTx = currentUserDoc.data() as UserData;
 
-      const currentFollowers = Array.isArray(userData.followers) ? userData.followers : [];
-      const currentFollowing = Array.isArray(currentUserDataTx.following) ? currentUserDataTx.following : [];
+      // Ensure arrays are valid and contain only strings
+      const currentFollowers = Array.isArray(userData.followers)
+        ? userData.followers.filter((id): id is string => typeof id === 'string')
+        : [];
+      const currentFollowing = Array.isArray(currentUserDataTx.following)
+        ? currentUserDataTx.following.filter((id): id is string => typeof id === 'string')
+        : [];
 
       if (isFollowing) {
         // Unfollow
-        const updatedFollowers = currentFollowers.filter((id: string) => id !== currentUserData.id);
-        const updatedFollowing = currentFollowing.filter((id: string) => id !== user.id);
+        const updatedFollowers = currentFollowers.filter((id) => id !== currentUserData.id);
+        const updatedFollowing = currentFollowing.filter((id) => id !== user.id);
 
         transaction.update(userRef, { followers: updatedFollowers });
         transaction.update(currentUserRef, { following: updatedFollowing });
@@ -73,7 +78,6 @@ const handleFollow = async () => {
     // Refresh user data
     const updatedUserDoc = await getDoc(userRef);
     if (updatedUserDoc.exists()) {
-      // Remove undefined fields before setting state
       setUser(removeUndefinedFields({
         id: updatedUserDoc.id,
         ...updatedUserDoc.data()
