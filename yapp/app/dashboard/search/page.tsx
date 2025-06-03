@@ -35,6 +35,8 @@ interface AppUser {
   username: string;
   photoURL: string;
   bio?: string;
+  firstName?: string;
+  lastName?: string;
 }
 
 interface UserProfile {
@@ -156,8 +158,13 @@ export default function SearchPage() {
             ...doc.data()
           })) as AppUser[];
         
+        const searchQueryLower = searchQuery.toLowerCase();
         const filteredUsers = users.filter(user => 
-          user.username && user.username.toLowerCase().startsWith(searchQuery.toLowerCase())
+          (user.username && user.username.toLowerCase().includes(searchQueryLower)) ||
+          (user.firstName && user.firstName.toLowerCase().includes(searchQueryLower)) ||
+          (user.lastName && user.lastName.toLowerCase().includes(searchQueryLower)) ||
+          (user.firstName && user.lastName && 
+            `${user.firstName} ${user.lastName}`.toLowerCase().includes(searchQueryLower))
         );
         setSearchResults(filteredUsers);
       } else {
@@ -333,7 +340,7 @@ export default function SearchPage() {
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search by username..."
+                    placeholder="Search by username or name..."
                     className="flex-1 px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-[#6c5ce7] focus:border-transparent"
                   />
                 </div>
