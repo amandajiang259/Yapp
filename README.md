@@ -14,7 +14,8 @@ Website: https://yapp-git-main-yangyingjiang-ufledus-projects.vercel.app/
 How to Use for New Users:
 1) Create an Account
 2) Enter your personal information and customize your profile
-3) Start posting and exploring!
+3) Set a username by clicking "Profile" in the navigation bar
+4) Start posting and exploring!
 
 More Information:
 - To navigate to the Home page, you can click "Home" or "Yapp"
