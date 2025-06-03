@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { auth, db } from '../../lib/firebase';
 import { User } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 
 const interests = [
   'Technology', 'Sports', 'Music', 'Art', 'Travel', 'Food', 'Fashion',
@@ -16,6 +17,7 @@ export default function ProfileSetup() {
   const [user, setUser] = useState<User | null>(null);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [username, setUsername] = useState('');
   const [birthday, setBirthday] = useState('');
   const [gender, setGender] = useState('');
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
@@ -48,7 +50,7 @@ export default function ProfileSetup() {
     setError(null);
     setIsSubmitting(true);
 
-    if (!firstName || !lastName || !birthday || !gender || selectedInterests.length < 2) {
+    if (!firstName || !lastName || !username || !birthday || !gender || selectedInterests.length < 2) {
       setError('Please fill in all fields and select at least 2 interests');
       setIsSubmitting(false);
       return;
@@ -57,6 +59,17 @@ export default function ProfileSetup() {
     try {
       if (!user) {
         setError('No user found. Please try logging in again.');
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Check if username is already taken
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where('username', '==', username));
+      const querySnapshot = await getDocs(q);
+      
+      if (!querySnapshot.empty) {
+        setError('This username is already taken. Please choose a different one.');
         setIsSubmitting(false);
         return;
       }
@@ -70,6 +83,7 @@ export default function ProfileSetup() {
       const profileData = {
         firstName,
         lastName,
+        username,
         birthday,
         gender,
         interests: selectedInterests,
@@ -143,6 +157,22 @@ export default function ProfileSetup() {
                   required
                 />
               </div>
+            </div>
+
+            <div>
+              <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-1">
+                Username
+              </label>
+              <input
+                type="text"
+                id="username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                placeholder="Choose a unique username"
+                required
+              />
+              <p className="mt-1 text-sm text-gray-500">This will be your unique identifier on Yapp</p>
             </div>
 
             <div>

@@ -53,6 +53,16 @@ export default function Dashboard() {
           const userData = userDoc.data();
           setFirstName(userData.firstName || '');
           setUserProfile(userData);
+
+          // Check if username exists
+          if (!userData.username) {
+            router.push('/profile-setup');
+            return;
+          }
+        } else {
+          // If no user document exists, redirect to profile setup
+          router.push('/profile-setup');
+          return;
         }
       } catch (error) {
         console.error('Error fetching user data:', error);
